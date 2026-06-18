@@ -3,9 +3,10 @@
 // (macOS 26+, Apple silicon) — one-microVM-per-sandbox isolation, the real
 // isolation upgrade over the shared-VM oci driver.
 //
-// Written against the documented `container` CLI surface. Points marked VERIFY
-// must be validated on a macOS 26 machine with `container` installed, since the
-// inspect JSON shape and the no-network flag aren't pinned down in the docs.
+// Validated live against apple `container` 1.0.0 on macOS 26: `--network none`
+// disables networking, and labels appear under configuration.labels in the
+// `inspect` JSON (located via walkLabels). apple `container` has no image
+// commit, so Snapshot/Fork return unsupported here.
 package applecontainer
 
 import (
@@ -80,7 +81,7 @@ func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
 		args = append(args, "-l", "peapod.name="+spec.Name)
 	}
 	if spec.Network == sandbox.NetworkNone {
-		// VERIFY: confirm apple `container` disables networking this way.
+		// Validated on container 1.0.0: leaves the microVM with no network.
 		args = append(args, "--network", "none")
 	}
 	if spec.Resources.CPUs > 0 {
@@ -145,7 +146,7 @@ func (d *Driver) Resolve(ctx context.Context, id string) (sandbox.Sandbox, error
 	}
 	labels := findPeapodLabels([]byte(out))
 	if labels == nil {
-		// Exists, but labels not located in the inspect JSON (VERIFY shape).
+		// Exists, but labels weren't found in the inspect JSON — minimal view.
 		return sandbox.Sandbox{ID: id, Backend: d.Name(), Ref: name, Workdir: "/work"}, nil
 	}
 	return sandboxFromLabels(d.Name(), labels), nil
@@ -233,7 +234,9 @@ func (d *Driver) Exec(ctx context.Context, ref string, argv []string, opts sandb
 	}
 	args = append(args, ref)
 	if opts.Workdir != "" {
-		args = append(args, "sh", "-c", `cd "$1"; shift; exec "$@"`, "sh", opts.Workdir)
+		// apple `container` (unlike docker) doesn't create the workdir, so make
+		// it here before cd'ing into it.
+		args = append(args, "sh", "-c", `mkdir -p "$1"; cd "$1"; shift; exec "$@"`, "sh", opts.Workdir)
 	}
 	args = append(args, argv...)
 	out, errOut, code, err := d.run(ctx, nil, args...)

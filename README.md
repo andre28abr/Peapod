@@ -17,9 +17,11 @@ MCP tools (`peapod_sandbox_create`, `peapod_exec`, `peapod_write_file`, …).
 
 A thin núcleo (`Manager`) over a swappable `Driver` seam:
 
-- `oci` (Phase 1) — docker/podman, container-per-sandbox.
-- `apple-container` (next) — one microVM per sandbox (Apple Virtualization.framework, macOS 26+).
+- `oci` (default) — docker/podman, container-per-sandbox.
+- `apple-container` — one microVM per sandbox (Apple `container` / Virtualization.framework,
+  macOS 26+). Validated on container 1.0.0. Select with `--backend apple` or `PEAPOD_BACKEND=apple`.
 - `libkrun` (later) — embedded microVM.
+- `mock` — in-memory, for tests / daemon-less dev.
 
 The MCP server, the CLI, and the future UI all sit on the same `Manager`, so new
 isolation backends and Phase 2/3 features plug in without touching the top.
@@ -57,6 +59,8 @@ Then an agent can call `peapod_sandbox_create` → `peapod_write_file` →
 
 ## Roadmap
 
-- **Phase 1 (now):** núcleo + MCP, `oci` driver.
-- **Phase 2:** snapshot & fork of running stacks (interface already present).
+- **Phase 1 (done):** núcleo + MCP, `oci` + `apple-container` drivers, resource limits,
+  exec timeouts, age-based auto-reap.
+- **Phase 2 (in progress):** filesystem snapshot & fork work today
+  (`peapod_snapshot` / `peapod_fork`); running-state (memory) snapshots next.
 - **Phase 3:** per-branch local preview envs + UI.
