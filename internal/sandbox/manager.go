@@ -141,3 +141,13 @@ func (m *Manager) Reap(ctx context.Context, maxAge time.Duration) ([]string, err
 	}
 	return reaped, nil
 }
+
+// ListSnapshots returns saved snapshots.
+func (m *Manager) ListSnapshots(ctx context.Context) ([]Snapshot, error) {
+	return m.drv.ListSnapshots(ctx)
+}
+
+// RemoveSnapshot deletes a snapshot by ref.
+func (m *Manager) RemoveSnapshot(ctx context.Context, ref string) error {
+	return m.drv.RemoveSnapshot(ctx, ref)
+}

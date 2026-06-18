@@ -90,6 +90,13 @@ func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
 	if spec.Resources.MemoryMB > 0 {
 		args = append(args, "--memory", strconv.Itoa(spec.Resources.MemoryMB)+"M")
 	}
+	for _, m := range spec.Mounts {
+		v := m.Host + ":" + m.Target
+		if m.ReadOnly {
+			v += ":ro"
+		}
+		args = append(args, "-v", v)
+	}
 	for k, v := range spec.Env {
 		args = append(args, "--env", k+"="+v)
 	}
@@ -294,4 +301,14 @@ func (d *Driver) Snapshot(ctx context.Context, ref, name string) (string, error)
 // Fork is not supported by the apple-container backend yet.
 func (d *Driver) Fork(ctx context.Context, snapshotRef string, spec sandbox.Spec) (sandbox.Sandbox, error) {
 	return sandbox.Sandbox{}, errUnsupported
+}
+
+// ListSnapshots returns nothing — apple container has no image commit.
+func (d *Driver) ListSnapshots(ctx context.Context) ([]sandbox.Snapshot, error) {
+	return nil, nil
+}
+
+// RemoveSnapshot is not supported by the apple-container backend.
+func (d *Driver) RemoveSnapshot(ctx context.Context, ref string) error {
+	return errUnsupported
 }

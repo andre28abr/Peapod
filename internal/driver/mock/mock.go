@@ -13,19 +13,21 @@ import (
 
 // Driver keeps sandboxes and their files in memory.
 type Driver struct {
-	mu    sync.Mutex
-	boxes map[string]sandbox.Sandbox
-	files map[string]map[string][]byte // ref -> path -> data
-	snaps map[string]map[string][]byte // snapshotRef -> path -> data
-	seq   int
+	mu       sync.Mutex
+	boxes    map[string]sandbox.Sandbox
+	files    map[string]map[string][]byte // ref -> path -> data
+	snaps    map[string]map[string][]byte // snapshotRef -> path -> data
+	snapMeta map[string]sandbox.Snapshot  // snapshotRef -> metadata
+	seq      int
 }
 
 // New returns an empty in-memory driver.
 func New() *Driver {
 	return &Driver{
-		boxes: map[string]sandbox.Sandbox{},
-		files: map[string]map[string][]byte{},
-		snaps: map[string]map[string][]byte{},
+		boxes:    map[string]sandbox.Sandbox{},
+		files:    map[string]map[string][]byte{},
+		snaps:    map[string]map[string][]byte{},
+		snapMeta: map[string]sandbox.Snapshot{},
 	}
 }
 
@@ -134,6 +136,7 @@ func (d *Driver) Snapshot(_ context.Context, ref, name string) (string, error) {
 		cp[k] = cloneBytes(v)
 	}
 	d.snaps[snapRef] = cp
+	d.snapMeta[snapRef] = sandbox.Snapshot{Ref: snapRef, Name: name, Created: time.Now().UTC().Format(time.RFC3339)}
 	return snapRef, nil
 }
 
@@ -157,4 +160,24 @@ func (d *Driver) Fork(_ context.Context, snapshotRef string, spec sandbox.Spec) 
 	}
 	d.files[id] = nf
 	return sb, nil
+}
+
+// ListSnapshots returns the recorded snapshots.
+func (d *Driver) ListSnapshots(_ context.Context) ([]sandbox.Snapshot, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	res := make([]sandbox.Snapshot, 0, len(d.snapMeta))
+	for _, s := range d.snapMeta {
+		res = append(res, s)
+	}
+	return res, nil
+}
+
+// RemoveSnapshot deletes a recorded snapshot.
+func (d *Driver) RemoveSnapshot(_ context.Context, ref string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.snaps, ref)
+	delete(d.snapMeta, ref)
+	return nil
 }

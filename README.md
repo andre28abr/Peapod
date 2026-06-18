@@ -57,10 +57,25 @@ claude mcp add peapod -- /absolute/path/to/bin/peapod mcp
 Then an agent can call `peapod_sandbox_create` → `peapod_write_file` →
 `peapod_exec` → `peapod_destroy`.
 
+## More commands
+
+```sh
+peapod ui                     # local web dashboard at http://127.0.0.1:7070
+peapod snapshot ls            # list snapshots
+peapod snapshot rm <ref>      # delete a snapshot
+peapod preview up             # sandbox for the current git branch (repo at /repo)
+peapod preview status
+peapod preview down
+peapod reap --max-age 30m     # destroy idle sandboxes
+peapod --backend apple ...    # microVM isolation (macOS 26 + apple/container)
+```
+
 ## Roadmap
 
 - **Phase 1 (done):** núcleo + MCP, `oci` + `apple-container` drivers, resource limits,
   exec timeouts, age-based auto-reap.
-- **Phase 2 (in progress):** filesystem snapshot & fork work today
-  (`peapod_snapshot` / `peapod_fork`); running-state (memory) snapshots next.
-- **Phase 3:** per-branch local preview envs + UI.
+- **Phase 2 (mostly done):** filesystem snapshot & fork + snapshot lifecycle
+  (`snapshot ls/rm`). Running-state (memory) checkpoint validated feasible on OrbStack
+  via `docker checkpoint`; `pause` / `resume` is the next build.
+- **Phase 3 (started):** per-branch preview envs (`preview up/status/down`) and a
+  minimal web dashboard (`peapod ui`) both work; a native UI comes later.

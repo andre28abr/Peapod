@@ -25,6 +25,13 @@ type Resources struct {
 	PidsLimit int     `json:"pids_limit,omitempty"`
 }
 
+// Mount is a host directory bind-mounted into the sandbox.
+type Mount struct {
+	Host     string `json:"host"`
+	Target   string `json:"target"`
+	ReadOnly bool   `json:"read_only,omitempty"`
+}
+
 // Spec describes a sandbox to create.
 type Spec struct {
 	Image     string            `json:"image"`
@@ -33,6 +40,7 @@ type Spec struct {
 	Workdir   string            `json:"workdir,omitempty"`
 	Env       map[string]string `json:"env,omitempty"`
 	Resources Resources         `json:"resources,omitempty"`
+	Mounts    []Mount           `json:"mounts,omitempty"`
 	// Labels carries internal metadata (e.g. peapod.id). The Manager fills it in.
 	Labels map[string]string `json:"-"`
 }
@@ -54,4 +62,12 @@ type ExecResult struct {
 	Stdout   string `json:"stdout"`
 	Stderr   string `json:"stderr"`
 	ExitCode int    `json:"exit_code"`
+}
+
+// Snapshot is a saved sandbox image that can be forked.
+type Snapshot struct {
+	Ref     string `json:"ref"`
+	Name    string `json:"name"`
+	Created string `json:"created,omitempty"`
+	Size    string `json:"size,omitempty"`
 }

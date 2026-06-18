@@ -111,6 +111,13 @@ func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
 	if spec.Resources.PidsLimit > 0 {
 		args = append(args, "--pids-limit", strconv.Itoa(spec.Resources.PidsLimit))
 	}
+	for _, m := range spec.Mounts {
+		v := m.Host + ":" + m.Target
+		if m.ReadOnly {
+			v += ":ro"
+		}
+		args = append(args, "-v", v)
+	}
 	for k, v := range spec.Env {
 		args = append(args, "-e", k+"="+v)
 	}
@@ -255,4 +262,48 @@ func (d *Driver) Snapshot(ctx context.Context, ref, name string) (string, error)
 func (d *Driver) Fork(ctx context.Context, snapshotRef string, spec sandbox.Spec) (sandbox.Sandbox, error) {
 	spec.Image = snapshotRef
 	return d.Create(ctx, spec)
+}
+
+// ListSnapshots lists the peapod-snapshot images.
+func (d *Driver) ListSnapshots(ctx context.Context) ([]sandbox.Snapshot, error) {
+	out, _, code, err := d.run(ctx, nil, "images",
+		"--filter", "reference=peapod-snapshot",
+		"--format", "{{.Repository}}:{{.Tag}}|{{.Tag}}|{{.CreatedSince}}|{{.Size}}")
+	if err != nil {
+		return nil, err
+	}
+	if code != 0 {
+		return nil, errors.New("list snapshots failed")
+	}
+	var res []sandbox.Snapshot
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		f := strings.SplitN(line, "|", 4)
+		s := sandbox.Snapshot{Ref: f[0]}
+		if len(f) > 1 {
+			s.Name = f[1]
+		}
+		if len(f) > 2 {
+			s.Created = f[2]
+		}
+		if len(f) > 3 {
+			s.Size = f[3]
+		}
+		res = append(res, s)
+	}
+	return res, nil
+}
+
+// RemoveSnapshot deletes a snapshot image.
+func (d *Driver) RemoveSnapshot(ctx context.Context, ref string) error {
+	_, errOut, code, err := d.run(ctx, nil, "rmi", ref)
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		return fmt.Errorf("remove snapshot failed: %s", strings.TrimSpace(errOut))
+	}
+	return nil
 }

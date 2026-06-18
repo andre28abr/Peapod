@@ -39,6 +39,11 @@ type Driver interface {
 	Snapshot(ctx context.Context, ref, name string) (string, error)
 	// Fork creates a new sandbox from a snapshot ref.
 	Fork(ctx context.Context, snapshotRef string, spec Spec) (Sandbox, error)
+
+	// ListSnapshots returns saved snapshots.
+	ListSnapshots(ctx context.Context) ([]Snapshot, error)
+	// RemoveSnapshot deletes a snapshot by ref.
+	RemoveSnapshot(ctx context.Context, ref string) error
 }
 
 // ExecOpts tunes a single Exec call.

@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"peapod/internal/backend"
 	"peapod/internal/mcpserver"
 	"peapod/internal/sandbox"
+	"peapod/internal/web"
 )
 
 const usage = `peapod — disposable, isolated sandboxes for AI agents
@@ -22,12 +25,18 @@ usage:
 
 commands:
   mcp                                 start the MCP server (stdio)
+  ui [--addr 127.0.0.1:7070]          start the local web dashboard
   sandbox create <image> [--name N] [--net none|egress]
   sandbox ls
   sandbox exec <id> <cmd>...
   sandbox rm <id>
   sandbox snapshot <id> <name>
   sandbox fork <snapshot> [--name N] [--net none|egress]
+  snapshot ls
+  snapshot rm <ref>
+  preview up [--image IMG] [--net none|egress]    sandbox for the current git branch
+  preview status
+  preview down
   reap [--max-age 30m]                destroy sandboxes older than max-age
   version
 
@@ -46,8 +55,14 @@ func main() {
 	switch args[0] {
 	case "mcp":
 		runMCP(ctx)
+	case "ui":
+		runUI(ctx, args[1:])
 	case "sandbox":
 		runSandbox(ctx, args[1:])
+	case "snapshot":
+		runSnapshot(ctx, args[1:])
+	case "preview":
+		runPreview(ctx, args[1:])
 	case "reap":
 		runReap(ctx, args[1:])
 	case "version":
@@ -104,6 +119,18 @@ func runMCP(ctx context.Context) {
 	}
 }
 
+func runUI(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("ui", flag.ExitOnError)
+	addr := fs.String("addr", "127.0.0.1:7070", "address to listen on")
+	_ = fs.Parse(args)
+	mgr := newManager()
+	fmt.Printf("peapod ui: http://%s  (backend %s)\n", *addr, mgr.Backend())
+	if err := web.Serve(ctx, mgr, *addr); err != nil {
+		fmt.Fprintln(os.Stderr, "peapod ui:", err)
+		os.Exit(1)
+	}
+}
+
 func runReap(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("reap", flag.ExitOnError)
 	maxAge := fs.Duration("max-age", 30*time.Minute, "destroy sandboxes older than this")
@@ -115,6 +142,121 @@ func runReap(ctx context.Context, args []string) {
 	for _, id := range ids {
 		fmt.Println("  -", id)
 	}
+}
+
+func runSnapshot(ctx context.Context, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: peapod snapshot ls | rm <ref>")
+		os.Exit(2)
+	}
+	mgr := newManager()
+	switch args[0] {
+	case "ls":
+		snaps, err := mgr.ListSnapshots(ctx)
+		check(err)
+		tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+		fmt.Fprintln(tw, "REF\tNAME\tCREATED\tSIZE")
+		for _, s := range snaps {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", s.Ref, s.Name, s.Created, s.Size)
+		}
+		_ = tw.Flush()
+	case "rm":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: peapod snapshot rm <ref>")
+			os.Exit(2)
+		}
+		check(mgr.RemoveSnapshot(ctx, args[1]))
+		fmt.Println("removed", args[1])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown snapshot subcommand %q\n", args[0])
+		os.Exit(2)
+	}
+}
+
+func runPreview(ctx context.Context, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: peapod preview up|status|down")
+		os.Exit(2)
+	}
+	mgr := newManager()
+	repoRoot, branch, err := gitInfo()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "peapod preview:", err)
+		os.Exit(1)
+	}
+	name := previewName(repoRoot, branch)
+
+	find := func() (sandbox.Sandbox, bool) {
+		boxes, _ := mgr.List(ctx)
+		for _, b := range boxes {
+			if b.Name == name {
+				return b, true
+			}
+		}
+		return sandbox.Sandbox{}, false
+	}
+
+	switch args[0] {
+	case "up":
+		fs := flag.NewFlagSet("up", flag.ExitOnError)
+		image := fs.String("image", "alpine", "image for the preview env")
+		net := fs.String("net", "egress", "network policy: none|egress")
+		_ = fs.Parse(args[1:])
+		if sb, ok := find(); ok {
+			fmt.Printf("preview already up for %q: %s\n", branch, sb.ID)
+			return
+		}
+		sb, err := mgr.Create(ctx, sandbox.Spec{
+			Image:   *image,
+			Name:    name,
+			Network: sandbox.NetworkPolicy(*net),
+			Workdir: "/repo",
+			Mounts:  []sandbox.Mount{{Host: repoRoot, Target: "/repo"}},
+		})
+		check(err)
+		fmt.Printf("preview up for branch %q: %s (repo mounted at /repo)\n", branch, sb.ID)
+	case "status":
+		if sb, ok := find(); ok {
+			fmt.Printf("branch %q -> %s (%s, %s)\n", branch, sb.ID, sb.Image, sb.Network)
+		} else {
+			fmt.Printf("no preview for branch %q\n", branch)
+		}
+	case "down":
+		sb, ok := find()
+		if !ok {
+			fmt.Printf("no preview for branch %q\n", branch)
+			return
+		}
+		check(mgr.Destroy(ctx, sb.ID))
+		fmt.Printf("preview down for branch %q (%s)\n", branch, sb.ID)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown preview subcommand %q\n", args[0])
+		os.Exit(2)
+	}
+}
+
+func gitInfo() (root, branch string, err error) {
+	r, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("not in a git repo")
+	}
+	b, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("cannot read git branch")
+	}
+	return strings.TrimSpace(string(r)), strings.TrimSpace(string(b)), nil
+}
+
+func previewName(root, branch string) string {
+	san := func(s string) string {
+		return strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' {
+				return r
+			}
+			return '-'
+		}, s)
+	}
+	return "preview-" + san(filepath.Base(root)) + "-" + san(branch)
 }
 
 func runSandbox(ctx context.Context, args []string) {
