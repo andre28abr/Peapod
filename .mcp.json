@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "peapod": {
+      "command": "/Users/andresouza/Documents/Dev/Platform/Peapod/bin/peapod",
+      "args": ["mcp"],
+      "env": {
+        "PEAPOD_BACKEND": "oci",
+        "PEAPOD_REAP_TTL": "30m"
+      }
+    }
+  }
+}
