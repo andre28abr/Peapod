@@ -1,0 +1,23 @@
+<svg viewBox="0 0 720 392" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Peapod terminal demo">
+  <rect x="0" y="0" width="720" height="392" rx="12" fill="#0d1117"/>
+  <rect x="0" y="0" width="720" height="36" rx="12" fill="#161b22"/>
+  <rect x="0" y="24" width="720" height="12" fill="#161b22"/>
+  <circle cx="22" cy="18" r="6" fill="#ff5f56"/>
+  <circle cx="42" cy="18" r="6" fill="#ffbd2e"/>
+  <circle cx="62" cy="18" r="6" fill="#27c93f"/>
+  <text x="360" y="22" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#8b949e">peapod</text>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="13.5">
+    <text x="20" y="72"><tspan fill="#27c93f">$</tspan> <tspan fill="#e6edf3">peapod sandbox create python:3.12-slim --net none</tspan></text>
+    <text x="20" y="96" fill="#8b949e">pp_a1b2c3d4</text>
+    <text x="20" y="128"><tspan fill="#27c93f">$</tspan> <tspan fill="#e6edf3">peapod sandbox exec pp_a1b2c3d4 python3 -c 'print(6*7)'</tspan></text>
+    <text x="20" y="152" fill="#8b949e">42</text>
+    <text x="20" y="184"><tspan fill="#27c93f">$</tspan> <tspan fill="#e6edf3">peapod sandbox history pp_a1b2c3d4</tspan></text>
+    <text x="20" y="208" fill="#8b949e">2026-06-19T12:00:07Z  exit=0  python3 -c print(6*7)</text>
+    <text x="20" y="240"><tspan fill="#27c93f">$</tspan> <tspan fill="#e6edf3">peapod snapshot ls</tspan></text>
+    <text x="20" y="264" fill="#8b949e">REF                  NAME  CREATED         SIZE</text>
+    <text x="20" y="284" fill="#8b949e">peapod-snapshot:v1   v1    2 minutes ago   48MB</text>
+    <text x="20" y="316"><tspan fill="#27c93f">$</tspan> <tspan fill="#e6edf3">peapod sandbox rm pp_a1b2c3d4</tspan></text>
+    <text x="20" y="340" fill="#8b949e">destroyed pp_a1b2c3d4</text>
+    <text x="20" y="372"><tspan fill="#27c93f">$</tspan> <tspan fill="#e6edf3">▋</tspan></text>
+  </g>
+</svg>
