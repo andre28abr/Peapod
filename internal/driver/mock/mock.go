@@ -18,6 +18,7 @@ type Driver struct {
 	files    map[string]map[string][]byte // ref -> path -> data
 	snaps    map[string]map[string][]byte // snapshotRef -> path -> data
 	snapMeta map[string]sandbox.Snapshot  // snapshotRef -> metadata
+	paused   map[string]bool              // ref -> paused
 	seq      int
 }
 
@@ -28,6 +29,7 @@ func New() *Driver {
 		files:    map[string]map[string][]byte{},
 		snaps:    map[string]map[string][]byte{},
 		snapMeta: map[string]sandbox.Snapshot{},
+		paused:   map[string]bool{},
 	}
 }
 
@@ -67,6 +69,7 @@ func (d *Driver) Resolve(_ context.Context, id string) (sandbox.Sandbox, error) 
 	if !ok {
 		return sandbox.Sandbox{}, sandbox.ErrNotFound
 	}
+	sb.Paused = d.paused[id]
 	return sb, nil
 }
 
@@ -76,6 +79,7 @@ func (d *Driver) List(_ context.Context) ([]sandbox.Sandbox, error) {
 	defer d.mu.Unlock()
 	res := make([]sandbox.Sandbox, 0, len(d.boxes))
 	for _, sb := range d.boxes {
+		sb.Paused = d.paused[sb.ID]
 		res = append(res, sb)
 	}
 	return res, nil
@@ -179,5 +183,27 @@ func (d *Driver) RemoveSnapshot(_ context.Context, ref string) error {
 	defer d.mu.Unlock()
 	delete(d.snaps, ref)
 	delete(d.snapMeta, ref)
+	return nil
+}
+
+// Pause marks a sandbox as paused.
+func (d *Driver) Pause(_ context.Context, ref string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.boxes[ref]; !ok {
+		return sandbox.ErrNotFound
+	}
+	d.paused[ref] = true
+	return nil
+}
+
+// Resume clears the paused mark.
+func (d *Driver) Resume(_ context.Context, ref string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.boxes[ref]; !ok {
+		return sandbox.ErrNotFound
+	}
+	delete(d.paused, ref)
 	return nil
 }

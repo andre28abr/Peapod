@@ -312,3 +312,13 @@ func (d *Driver) ListSnapshots(ctx context.Context) ([]sandbox.Snapshot, error) 
 func (d *Driver) RemoveSnapshot(ctx context.Context, ref string) error {
 	return errUnsupported
 }
+
+// Pause is not supported — apple `container` has no freeze (only stop/start).
+func (d *Driver) Pause(ctx context.Context, ref string) error {
+	return errUnsupported
+}
+
+// Resume is not supported by the apple-container backend.
+func (d *Driver) Resume(ctx context.Context, ref string) error {
+	return errUnsupported
+}

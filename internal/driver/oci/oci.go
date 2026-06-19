@@ -129,17 +129,22 @@ func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
 // the source of truth, so it works across CLI invocations).
 func (d *Driver) Resolve(ctx context.Context, id string) (sandbox.Sandbox, error) {
 	name := containerName(id)
-	out, _, code, err := d.run(ctx, nil, "inspect", "--format", "{{json .Config.Labels}}", name)
+	out, _, code, err := d.run(ctx, nil, "inspect", "--format",
+		`{"labels":{{json .Config.Labels}},"paused":{{.State.Paused}}}`, name)
 	if err != nil {
 		return sandbox.Sandbox{}, err
 	}
 	if code != 0 {
 		return sandbox.Sandbox{}, sandbox.ErrNotFound
 	}
-	var labels map[string]string
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &labels); err != nil {
-		return sandbox.Sandbox{}, fmt.Errorf("parse labels: %w", err)
+	var meta struct {
+		Labels map[string]string `json:"labels"`
+		Paused bool              `json:"paused"`
 	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &meta); err != nil {
+		return sandbox.Sandbox{}, fmt.Errorf("parse inspect: %w", err)
+	}
+	labels := meta.Labels
 	var created time.Time
 	if ns, perr := strconv.ParseInt(labels["peapod.created"], 10, 64); perr == nil {
 		created = time.Unix(0, ns)
@@ -151,6 +156,7 @@ func (d *Driver) Resolve(ctx context.Context, id string) (sandbox.Sandbox, error
 		Network: sandbox.NetworkPolicy(labels["peapod.network"]),
 		Workdir: labels["peapod.workdir"],
 		Created: created,
+		Paused:  meta.Paused,
 	}, nil
 }
 
@@ -304,6 +310,30 @@ func (d *Driver) RemoveSnapshot(ctx context.Context, ref string) error {
 	}
 	if code != 0 {
 		return fmt.Errorf("remove snapshot failed: %s", strings.TrimSpace(errOut))
+	}
+	return nil
+}
+
+// Pause freezes the container's processes in memory (docker pause).
+func (d *Driver) Pause(ctx context.Context, ref string) error {
+	_, errOut, code, err := d.run(ctx, nil, "pause", ref)
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		return fmt.Errorf("pause failed: %s", strings.TrimSpace(errOut))
+	}
+	return nil
+}
+
+// Resume unfreezes the container (docker unpause).
+func (d *Driver) Resume(ctx context.Context, ref string) error {
+	_, errOut, code, err := d.run(ctx, nil, "unpause", ref)
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		return fmt.Errorf("resume failed: %s", strings.TrimSpace(errOut))
 	}
 	return nil
 }

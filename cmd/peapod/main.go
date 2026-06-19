@@ -30,6 +30,8 @@ commands:
   sandbox ls
   sandbox exec <id> <cmd>...
   sandbox rm <id>
+  sandbox pause <id>
+  sandbox resume <id>
   sandbox snapshot <id> <name>
   sandbox fork <snapshot> [--name N] [--net none|egress]
   snapshot ls
@@ -282,9 +284,13 @@ func runSandbox(ctx context.Context, args []string) {
 		boxes, err := mgr.List(ctx)
 		check(err)
 		tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-		fmt.Fprintln(tw, "ID\tIMAGE\tNETWORK\tNAME")
+		fmt.Fprintln(tw, "ID\tIMAGE\tNETWORK\tSTATUS\tNAME")
 		for _, b := range boxes {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", b.ID, b.Image, b.Network, b.Name)
+			status := "running"
+			if b.Paused {
+				status = "paused"
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", b.ID, b.Image, b.Network, status, b.Name)
 		}
 		_ = tw.Flush()
 	case "exec":
@@ -304,6 +310,20 @@ func runSandbox(ctx context.Context, args []string) {
 		}
 		check(mgr.Destroy(ctx, args[1]))
 		fmt.Println("destroyed", args[1])
+	case "pause":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox pause <id>")
+			os.Exit(2)
+		}
+		check(mgr.Pause(ctx, args[1]))
+		fmt.Println("paused", args[1])
+	case "resume":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox resume <id>")
+			os.Exit(2)
+		}
+		check(mgr.Resume(ctx, args[1]))
+		fmt.Println("resumed", args[1])
 	case "snapshot":
 		if len(args) < 3 {
 			fmt.Fprintln(os.Stderr, "usage: peapod sandbox snapshot <id> <name>")

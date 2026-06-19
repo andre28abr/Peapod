@@ -43,6 +43,20 @@ func TestManagerLifecycle(t *testing.T) {
 		t.Fatalf("exec: %v", err)
 	}
 
+	// pause / resume toggles the running state.
+	if err := mgr.Pause(ctx, sb.ID); err != nil {
+		t.Fatalf("pause: %v", err)
+	}
+	if boxes, _ := mgr.List(ctx); !isPaused(boxes, sb.ID) {
+		t.Error("sandbox should be paused")
+	}
+	if err := mgr.Resume(ctx, sb.ID); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if boxes, _ := mgr.List(ctx); isPaused(boxes, sb.ID) {
+		t.Error("sandbox should be running after resume")
+	}
+
 	// Phase 2 surface: snapshot + fork through the same seam.
 	snap, err := mgr.Snapshot(ctx, sb.ID, "v1")
 	if err != nil {
@@ -75,4 +89,13 @@ func TestManagerLifecycle(t *testing.T) {
 			t.Errorf("sandbox %s still present after destroy", sb.ID)
 		}
 	}
+}
+
+func isPaused(boxes []sandbox.Sandbox, id string) bool {
+	for _, b := range boxes {
+		if b.ID == id {
+			return b.Paused
+		}
+	}
+	return false
 }

@@ -56,24 +56,9 @@ func Serve(ctx context.Context, mgr *sandbox.Manager, addr string) error {
 		}
 	})
 
-	mux.HandleFunc("/api/destroy", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var in struct {
-			ID string `json:"id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, err)
-			return
-		}
-		if err := mgr.Destroy(r.Context(), in.ID); err != nil {
-			writeErr(w, err)
-			return
-		}
-		writeJSON(w, map[string]bool{"ok": true})
-	})
+	mux.HandleFunc("/api/destroy", func(w http.ResponseWriter, r *http.Request) { idAction(w, r, mgr.Destroy) })
+	mux.HandleFunc("/api/pause", func(w http.ResponseWriter, r *http.Request) { idAction(w, r, mgr.Pause) })
+	mux.HandleFunc("/api/resume", func(w http.ResponseWriter, r *http.Request) { idAction(w, r, mgr.Resume) })
 
 	mux.HandleFunc("/api/snapshots", func(w http.ResponseWriter, r *http.Request) {
 		snaps, err := mgr.ListSnapshots(r.Context())
@@ -109,6 +94,25 @@ func writeErr(w http.ResponseWriter, err error) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 }
 
+func idAction(w http.ResponseWriter, r *http.Request, fn func(context.Context, string) error) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := fn(r.Context(), in.ID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
 const page = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Peapod</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -135,7 +139,7 @@ const page = `<!doctype html>
    <button class="primary" type="submit">create sandbox</button>
  </form>
  <h2>sandboxes</h2>
- <table><thead><tr><th>id</th><th>image</th><th>network</th><th>name</th><th></th></tr></thead><tbody id="boxes"></tbody></table>
+ <table><thead><tr><th>id</th><th>image</th><th>network</th><th>status</th><th>name</th><th></th></tr></thead><tbody id="boxes"></tbody></table>
  <h2>snapshots</h2>
  <table><thead><tr><th>ref</th><th>name</th><th>created</th><th>size</th></tr></thead><tbody id="snaps"></tbody></table>
  <script>
@@ -144,10 +148,14 @@ const page = `<!doctype html>
    try{
      var d = await (await fetch("/api/sandboxes")).json();
      var rows = (d.sandboxes||[]).map(function(b){
-       return "<tr><td>"+esc(b.id)+"</td><td>"+esc(b.image)+"</td><td><span class=pill>"+esc(b.network)+"</span></td><td>"+esc(b.name)+"</td>"+
-         "<td><button class=danger onclick=\"destroy('"+esc(b.id)+"')\">destroy</button></td></tr>";
+       var status = b.paused ? "paused" : "running";
+       var toggle = b.paused
+         ? "<button onclick=\"act('resume','"+esc(b.id)+"')\">resume</button>"
+         : "<button onclick=\"act('pause','"+esc(b.id)+"')\">pause</button>";
+       return "<tr><td>"+esc(b.id)+"</td><td>"+esc(b.image)+"</td><td><span class=pill>"+esc(b.network)+"</span></td><td>"+status+"</td><td>"+esc(b.name)+"</td>"+
+         "<td>"+toggle+" <button class=danger onclick=\"destroy('"+esc(b.id)+"')\">destroy</button></td></tr>";
      }).join("");
-     document.getElementById("boxes").innerHTML = rows || "<tr><td colspan=5 class=muted>no sandboxes</td></tr>";
+     document.getElementById("boxes").innerHTML = rows || "<tr><td colspan=6 class=muted>no sandboxes</td></tr>";
      var d2 = await (await fetch("/api/snapshots")).json();
      var rows2 = (d2.snapshots||[]).map(function(s){
        return "<tr><td>"+esc(s.ref)+"</td><td>"+esc(s.name)+"</td><td>"+esc(s.created)+"</td><td>"+esc(s.size)+"</td></tr>";
@@ -157,6 +165,10 @@ const page = `<!doctype html>
  }
  async function destroy(id){
    await fetch("/api/destroy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})});
+   refresh();
+ }
+ async function act(kind,id){
+   await fetch("/api/"+kind,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})});
    refresh();
  }
  document.getElementById("createForm").addEventListener("submit", async function(e){

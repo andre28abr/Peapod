@@ -55,6 +55,7 @@ type Sandbox struct {
 	Network NetworkPolicy `json:"network"`
 	Workdir string        `json:"workdir"`
 	Created time.Time     `json:"created,omitempty"`
+	Paused  bool          `json:"paused,omitempty"`
 }
 
 // ExecResult is the outcome of running a command in a sandbox.

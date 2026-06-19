@@ -44,6 +44,11 @@ type Driver interface {
 	ListSnapshots(ctx context.Context) ([]Snapshot, error)
 	// RemoveSnapshot deletes a snapshot by ref.
 	RemoveSnapshot(ctx context.Context, ref string) error
+
+	// Pause freezes a sandbox's processes in memory (zero CPU).
+	Pause(ctx context.Context, ref string) error
+	// Resume unfreezes a paused sandbox.
+	Resume(ctx context.Context, ref string) error
 }
 
 // ExecOpts tunes a single Exec call.

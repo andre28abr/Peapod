@@ -151,3 +151,21 @@ func (m *Manager) ListSnapshots(ctx context.Context) ([]Snapshot, error) {
 func (m *Manager) RemoveSnapshot(ctx context.Context, ref string) error {
 	return m.drv.RemoveSnapshot(ctx, ref)
 }
+
+// Pause freezes a sandbox's processes (memory preserved, zero CPU).
+func (m *Manager) Pause(ctx context.Context, id string) error {
+	sb, err := m.drv.Resolve(ctx, id)
+	if err != nil {
+		return err
+	}
+	return m.drv.Pause(ctx, sb.Ref)
+}
+
+// Resume unfreezes a paused sandbox.
+func (m *Manager) Resume(ctx context.Context, id string) error {
+	sb, err := m.drv.Resolve(ctx, id)
+	if err != nil {
+		return err
+	}
+	return m.drv.Resume(ctx, sb.Ref)
+}
