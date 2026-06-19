@@ -9,12 +9,20 @@ APP="Peapod.app"
 echo "==> building peapod CLI (Go)"
 ( cd "$ROOT" && go build -o ui-native/peapod-bin ./cmd/peapod )
 
+echo "==> generating icon"
+swiftc -O -o /tmp/peapod-iconmaker Icon.swift
+rm -rf Peapod.iconset
+/tmp/peapod-iconmaker Peapod.iconset
+iconutil -c icns Peapod.iconset -o Peapod.icns
+rm -rf Peapod.iconset
+
 echo "==> building app (Swift)"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -parse-as-library -O -o "$APP/Contents/MacOS/Peapod" Peapod.swift
 mv peapod-bin "$APP/Contents/Resources/peapod"
 chmod +x "$APP/Contents/Resources/peapod"
+cp Peapod.icns "$APP/Contents/Resources/Peapod.icns"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -27,6 +35,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>CFBundleIconFile</key><string>Peapod</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
