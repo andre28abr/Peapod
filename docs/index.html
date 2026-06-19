@@ -1,18 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Peapod — disposable sandboxes for AI agents</title>
+<title>Peapod — sandboxes isolados para agentes de IA</title>
 <style>
-  :root { --green:#3C8A2C; --green2:#74C947; --ink:#0d1117; --muted:#5b6470; --bg:#fbfdf9; --card:#fff; --line:#e6ebe2; }
+  :root { --green:#3C8A2C; --ink:#0d1117; --muted:#5b6470; --bg:#fbfdf9; --card:#fff; --line:#e6ebe2; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
   .wrap { max-width:880px; margin:0 auto; padding:0 20px; }
   header { text-align:center; padding:64px 20px 32px; }
   .icon { width:96px; height:96px; }
   h1 { font-size:2.6rem; margin:14px 0 6px; }
-  .tag { font-size:1.2rem; color:var(--muted); margin:0 auto; max-width:560px; }
+  .tag { font-size:1.2rem; color:var(--muted); margin:0 auto; max-width:580px; }
   .cta { margin-top:24px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
   .btn { text-decoration:none; padding:11px 20px; border-radius:10px; font-weight:600; }
   .btn.primary { background:var(--green); color:#fff; }
@@ -43,37 +43,38 @@
     </g>
   </svg>
   <h1>Peapod 🫛</h1>
-  <p class="tag">Disposable, isolated sandboxes for AI agents — local-first, on your Mac.</p>
+  <p class="tag">Sandboxes isolados e descartáveis para agentes de IA — local, no seu Mac.</p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/YOURUSER/peapod">View on GitHub</a>
-    <a class="btn ghost" href="#start">Get started</a>
+    <a class="btn primary" href="https://github.com/andre28abr/Peapod">Ver no GitHub</a>
+    <a class="btn ghost" href="#start">Começar</a>
   </div>
-  <img class="demo" src="demo.svg" alt="Peapod terminal demo">
+  <img class="demo" src="demo.svg" alt="Demo do Peapod no terminal">
 </header>
 
 <div class="wrap">
   <section>
-    <h2>Why</h2>
-    <p>Letting an AI agent run code on your machine is risky — a bug or a bad dependency
-    touches your files, your network, your keys. Peapod wraps every run in a sandbox that's
-    <strong>isolated</strong>, <strong>disposable</strong>, has <strong>no network by default</strong>,
-    and keeps a <strong>full audit trail</strong> of everything that ran.</p>
+    <h2>Por quê</h2>
+    <p>Deixar uma IA rodar código na sua máquina é risco — um bug ou uma dependência maliciosa
+    toca seus arquivos, sua rede, suas chaves. O Peapod aplica <strong>privacidade e menor
+    privilégio</strong> a esse problema: cada execução fica <strong>isolada</strong>,
+    <strong>descartável</strong>, com <strong>rede desligada por padrão</strong> e uma
+    <strong>trilha de auditoria</strong> completa de tudo que rodou.</p>
   </section>
 
   <section>
-    <h2>Features</h2>
+    <h2>Funcionalidades</h2>
     <div class="grid">
-      <div class="card"><h3>Agent-native</h3><p>Driven over MCP — agents create, run, and destroy sandboxes by themselves (12 tools).</p></div>
-      <div class="card"><h3>Audit trail</h3><p>Every command an agent runs is recorded and reviewable.</p></div>
-      <div class="card"><h3>Domain firewall</h3><p>Egress allowlist proxy — the sandbox reaches only the domains you choose.</p></div>
-      <div class="card"><h3>Snapshots</h3><p>Snapshot, fork, prune, and diff a sandbox's filesystem.</p></div>
-      <div class="card"><h3>Pluggable isolation</h3><p>Docker/Podman, or one microVM per sandbox via Apple’s container framework.</p></div>
-      <div class="card"><h3>Native app + web UI</h3><p>A SwiftUI macOS app and a local web dashboard, on top of the same engine.</p></div>
+      <div class="card"><h3>Feito para agentes</h3><p>Dirigido por MCP — agentes criam, rodam e descartam sandboxes sozinhos (12 ferramentas).</p></div>
+      <div class="card"><h3>Trilha de auditoria</h3><p>Todo comando que um agente roda fica registrado e revisável.</p></div>
+      <div class="card"><h3>Firewall por domínio</h3><p>Proxy de allowlist de egresso — o sandbox alcança só os domínios que você liberar.</p></div>
+      <div class="card"><h3>Snapshots</h3><p>Snapshot, fork, prune e diff do filesystem de um sandbox.</p></div>
+      <div class="card"><h3>Isolamento plugável</h3><p>Docker/Podman, ou uma microVM por sandbox via o framework container da Apple.</p></div>
+      <div class="card"><h3>App nativo + web</h3><p>Um app SwiftUI de macOS e um dashboard web, sobre o mesmo núcleo.</p></div>
     </div>
   </section>
 
   <section id="start">
-    <h2>Get started</h2>
+    <h2>Começar</h2>
     <pre>go build -o bin/peapod ./cmd/peapod
 
 ID=$(bin/peapod sandbox create python:3.12-slim --net none)
@@ -81,11 +82,11 @@ bin/peapod sandbox exec "$ID" python3 -c 'print(6*7)'
 bin/peapod sandbox history "$ID"
 bin/peapod sandbox rm "$ID"
 
-# native app:
+# app nativo:
 cd ui-native && ./build.sh   # → Peapod.app + Peapod.dmg</pre>
   </section>
 </div>
 
-<footer>Built with Go &amp; SwiftUI · MIT © Andre Souza</footer>
+<footer>Feito com Go &amp; SwiftUI · AGPL-3.0 © André Augusto Azarias De Souza · <a href="https://github.com/andre28abr">github.com/andre28abr</a></footer>
 </body>
 </html>
