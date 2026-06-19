@@ -16,6 +16,7 @@ import (
 
 	"peapod/internal/backend"
 	"peapod/internal/mcpserver"
+	"peapod/internal/proxy"
 	"peapod/internal/sandbox"
 	"peapod/internal/web"
 )
@@ -28,7 +29,7 @@ usage:
 commands:
   mcp                                 start the MCP server (stdio)
   ui [--addr 127.0.0.1:7070]          start the local web dashboard
-  sandbox create <image> [--name N] [--net none|egress] [--ports h:c,...]
+  sandbox create <image> [--name N] [--net none|egress] [--ports h:c,...] [--allow d1,d2]
   sandbox ls
   sandbox exec <id> <cmd>...
   sandbox rm <id>
@@ -54,6 +55,7 @@ commands:
   down [-f peapod.json]               stop the group
   ps [-f peapod.json]                 list the group
   templates [--json]                  list quick-start images
+  proxy --allow d1,d2 [--addr :8899]  egress allowlist proxy for sandboxes
   version
 
 backend also via env PEAPOD_BACKEND (default: oci)
@@ -91,6 +93,8 @@ func main() {
 		runPs(ctx, args[1:])
 	case "templates":
 		runTemplates(args[1:])
+	case "proxy":
+		runProxy(args[1:])
 	case "version":
 		fmt.Println("peapod 0.1.0")
 	case "-h", "--help", "help":
@@ -194,6 +198,19 @@ var templates = []struct {
 	{"postgres", "postgres:16", "PostgreSQL 16"},
 	{"ubuntu", "ubuntu:24.04", "Ubuntu 24.04"},
 	{"alpine", "alpine", "Alpine (tiny)"},
+}
+
+func runProxy(args []string) {
+	fs := flag.NewFlagSet("proxy", flag.ExitOnError)
+	allow := fs.String("allow", "", "comma-separated allowed domains")
+	addr := fs.String("addr", ":8899", "listen address")
+	_ = fs.Parse(args)
+	doms := splitComma(*allow)
+	fmt.Fprintf(os.Stderr, "peapod proxy on %s — allow: %v\n", *addr, doms)
+	if err := proxy.New(doms).ListenAndServe(*addr); err != nil {
+		fmt.Fprintln(os.Stderr, "peapod proxy:", err)
+		os.Exit(1)
+	}
 }
 
 func runTemplates(args []string) {
@@ -363,14 +380,24 @@ func runSandbox(ctx context.Context, args []string) {
 		name := fs.String("name", "", "human label")
 		net := fs.String("net", "none", "network policy: none|egress")
 		portsArg := fs.String("ports", "", "comma-separated host:container ports")
+		allow := fs.String("allow", "", "egress allowlist domains (via proxy)")
 		parseFlagsAnywhere(fs, args[1:])
 		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "usage: peapod sandbox create <image> [--name N] [--net none|egress] [--ports h:c,...]")
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox create <image> [--name N] [--net none|egress] [--ports h:c,...] [--allow d1,d2]")
 			os.Exit(2)
 		}
 		ports, err := parsePorts(splitComma(*portsArg))
 		check(err)
-		sb, err := mgr.Create(ctx, sandbox.Spec{Image: fs.Arg(0), Name: *name, Network: sandbox.NetworkPolicy(*net), Ports: ports})
+		spec := sandbox.Spec{Image: fs.Arg(0), Name: *name, Network: sandbox.NetworkPolicy(*net), Ports: ports}
+		if doms := splitComma(*allow); len(doms) > 0 {
+			spec.Network = sandbox.NetworkEgress
+			spec.Env = map[string]string{}
+			for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+				spec.Env[k] = "http://host.docker.internal:8899"
+			}
+			fmt.Fprintf(os.Stderr, "note: run `peapod proxy --allow %s` so this sandbox can reach those domains.\n", *allow)
+		}
+		sb, err := mgr.Create(ctx, spec)
 		check(err)
 		fmt.Println(sb.ID)
 	case "ls":
@@ -541,7 +568,7 @@ func parseFlagsAnywhere(fs *flag.FlagSet, args []string) {
 	valueFlag := map[string]bool{
 		"-name": true, "--name": true, "-net": true, "--net": true,
 		"-ports": true, "--ports": true, "-image": true, "--image": true,
-		"-tail": true, "--tail": true,
+		"-tail": true, "--tail": true, "-allow": true, "--allow": true,
 	}
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {
