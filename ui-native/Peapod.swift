@@ -69,6 +69,13 @@ func runPeapod(_ args: [String]) -> (out: String, err: String, ok: Bool) {
             p.terminationStatus == 0)
 }
 
+// fetchStats is a free (non-actor) function so it can run off the main thread.
+func fetchStats(_ id: String) -> Stat? {
+    let r = runPeapod(["sandbox", "stats", id, "--json"])
+    guard r.ok, let d = r.out.data(using: .utf8) else { return nil }
+    return try? JSONDecoder().decode(Stat.self, from: d)
+}
+
 @MainActor
 final class Model: ObservableObject {
     @Published var boxes: [Sandbox] = []
@@ -128,6 +135,26 @@ final class Model: ObservableObject {
     }
 }
 
+struct Sparkline: View {
+    let values: [Double]
+    let color: Color
+    var body: some View {
+        GeometryReader { geo in
+            let maxV = max(values.max() ?? 1, 1)
+            let w = geo.size.width, h = geo.size.height
+            Path { p in
+                guard values.count > 1 else { return }
+                for (i, v) in values.enumerated() {
+                    let x = w * CGFloat(i) / CGFloat(values.count - 1)
+                    let y = h - h * CGFloat(v / maxV)
+                    if i == 0 { p.move(to: CGPoint(x: x, y: y)) } else { p.addLine(to: CGPoint(x: x, y: y)) }
+                }
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
+        }
+    }
+}
+
 struct DetailView: View {
     let model: Model
     let box: Sandbox
@@ -135,7 +162,10 @@ struct DetailView: View {
     @State private var logs = "loading…"
     @State private var stat: Stat?
     @State private var history: [HistoryEntry] = []
+    @State private var cpuHist: [Double] = []
+    @State private var memHist: [Double] = []
     @State private var tab = 1 // 0 = Logs, 1 = History
+    private let sampleTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -147,10 +177,16 @@ struct DetailView: View {
             }
             Text("\(box.image) · \(box.network)").font(.caption).foregroundColor(.secondary)
             if let s = stat {
-                HStack(spacing: 18) {
-                    Label(s.cpu_perc, systemImage: "cpu")
-                    Label("\(s.mem_usage) (\(s.mem_perc))", systemImage: "memorychip")
-                }.font(.caption)
+                HStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(s.cpu_perc, systemImage: "cpu").font(.caption)
+                        Sparkline(values: cpuHist, color: .green).frame(width: 130, height: 26)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("\(s.mem_usage) (\(s.mem_perc))", systemImage: "memorychip").font(.caption)
+                        Sparkline(values: memHist, color: .blue).frame(width: 130, height: 26)
+                    }
+                }
             }
             Picker("", selection: $tab) {
                 Text("History").tag(1)
@@ -197,12 +233,30 @@ struct DetailView: View {
         .padding(16)
         .frame(width: 560, height: 420)
         .onAppear { load() }
+        .onReceive(sampleTimer) { _ in sample() }
     }
 
     private func load() {
-        stat = model.stats(box.id)
         logs = model.logs(box.id)
         history = model.history(box.id)
+        sample()
+    }
+
+    private func sample() {
+        let id = box.id
+        DispatchQueue.global(qos: .utility).async {
+            let s = fetchStats(id)
+            DispatchQueue.main.async {
+                guard let s = s else { return }
+                stat = s
+                cpuHist = Array((cpuHist + [pct(s.cpu_perc)]).suffix(40))
+                memHist = Array((memHist + [pct(s.mem_perc)]).suffix(40))
+            }
+        }
+    }
+
+    private func pct(_ s: String) -> Double {
+        Double(s.replacingOccurrences(of: "%", with: "")) ?? 0
     }
 }
 
