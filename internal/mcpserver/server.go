@@ -143,6 +143,20 @@ func New(mgr *sandbox.Manager) *mcp.Server {
 		return nil, okOut{OK: true}, nil
 	})
 
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "peapod_history",
+		Description: "Get the audit trail of commands run in a sandbox (what an agent did).",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in idIn) (*mcp.CallToolResult, histOut, error) {
+		entries, err := mgr.History(in.ID)
+		if err != nil {
+			return nil, histOut{}, err
+		}
+		if entries == nil {
+			entries = []sandbox.HistoryEntry{}
+		}
+		return nil, histOut{Entries: entries}, nil
+	})
+
 	return s
 }
 
@@ -250,6 +264,10 @@ type snapListOut struct {
 
 type snapRefIn struct {
 	Ref string `json:"ref" jsonschema:"snapshot ref from peapod_snapshot"`
+}
+
+type histOut struct {
+	Entries []sandbox.HistoryEntry `json:"entries"`
 }
 
 type forkIn struct {

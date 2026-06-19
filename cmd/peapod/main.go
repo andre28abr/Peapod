@@ -38,6 +38,7 @@ commands:
   sandbox restore <id> <name>
   sandbox logs <id> [--tail N]
   sandbox stats <id>
+  sandbox history <id>                 audit trail of commands run in the sandbox
   sandbox snapshot <id> <name>
   sandbox fork <snapshot> [--name N] [--net none|egress]
   snapshot ls
@@ -404,6 +405,25 @@ func runSandbox(ctx context.Context, args []string) {
 			_ = json.NewEncoder(os.Stdout).Encode(st)
 		} else {
 			fmt.Printf("CPU %s   MEM %s (%s)\n", st.CPUPerc, st.MemUsage, st.MemPerc)
+		}
+	case "history":
+		fs := flag.NewFlagSet("history", flag.ExitOnError)
+		asJSON := fs.Bool("json", false, "output JSON")
+		parseFlagsAnywhere(fs, args[1:])
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox history <id>")
+			os.Exit(2)
+		}
+		entries, err := mgr.History(fs.Arg(0))
+		check(err)
+		if *asJSON {
+			_ = json.NewEncoder(os.Stdout).Encode(entries)
+		} else if len(entries) == 0 {
+			fmt.Println("(no history)")
+		} else {
+			for _, e := range entries {
+				fmt.Printf("%s  exit=%d  %s\n", e.Time, e.ExitCode, e.Command)
+			}
 		}
 	case "snapshot":
 		if len(args) < 3 {

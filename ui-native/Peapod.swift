@@ -18,6 +18,13 @@ struct Stat: Codable {
     let mem_perc: String
 }
 
+struct HistoryEntry: Codable {
+    let time: String
+    let command: String
+    let exit_code: Int
+    let preview: String?
+}
+
 func peapodBin() -> String {
     if let res = Bundle.main.resourceURL?.appendingPathComponent("peapod").path,
        FileManager.default.isExecutableFile(atPath: res) {
@@ -101,6 +108,12 @@ final class Model: ObservableObject {
         guard r.ok, let d = r.out.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(Stat.self, from: d)
     }
+
+    func history(_ id: String) -> [HistoryEntry] {
+        let r = runPeapod(["sandbox", "history", id, "--json"])
+        guard r.ok, let d = r.out.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([HistoryEntry].self, from: d)) ?? []
+    }
 }
 
 struct DetailView: View {
@@ -109,6 +122,8 @@ struct DetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var logs = "loading…"
     @State private var stat: Stat?
+    @State private var history: [HistoryEntry] = []
+    @State private var tab = 1 // 0 = Logs, 1 = History
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -125,26 +140,57 @@ struct DetailView: View {
                     Label("\(s.mem_usage) (\(s.mem_perc))", systemImage: "memorychip")
                 }.font(.caption)
             }
-            Text("Logs").font(.headline)
+            Picker("", selection: $tab) {
+                Text("History").tag(1)
+                Text("Logs").tag(0)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
             ScrollView {
-                Text(logs)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
+                if tab == 0 {
+                    Text(logs)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if history.isEmpty {
+                            Text("No commands recorded yet.").font(.caption).foregroundColor(.secondary)
+                        }
+                        ForEach(Array(history.enumerated()), id: \.offset) { _, e in
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack {
+                                    Text(e.command).font(.system(.caption, design: .monospaced))
+                                    Spacer()
+                                    Text("exit \(e.exit_code)")
+                                        .font(.caption2)
+                                        .foregroundColor(e.exit_code == 0 ? .secondary : .red)
+                                }
+                                if let p = e.preview, !p.isEmpty {
+                                    Text(p).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+                                }
+                            }
+                        }
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
+                }
             }
             .frame(minHeight: 220)
             .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(6)
         }
         .padding(16)
-        .frame(width: 540, height: 400)
+        .frame(width: 560, height: 420)
         .onAppear { load() }
     }
 
     private func load() {
         stat = model.stats(box.id)
         logs = model.logs(box.id)
+        history = model.history(box.id)
     }
 }
 

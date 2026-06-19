@@ -4,7 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -76,7 +80,11 @@ func (m *Manager) Exec(ctx context.Context, id string, argv []string, opts ExecO
 	if opts.Workdir == "" {
 		opts.Workdir = sb.Workdir
 	}
-	return m.drv.Exec(ctx, sb.Ref, argv, opts)
+	res, err := m.drv.Exec(ctx, sb.Ref, argv, opts)
+	if err == nil {
+		m.record(id, argv, res)
+	}
+	return res, err
 }
 
 // WriteFile writes a file into the sandbox.
@@ -103,7 +111,11 @@ func (m *Manager) Destroy(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return m.drv.Destroy(ctx, sb.Ref)
+	if err := m.drv.Destroy(ctx, sb.Ref); err != nil {
+		return err
+	}
+	_ = os.Remove(m.histPath(id))
+	return nil
 }
 
 // Snapshot captures a sandbox (Phase 2 entry point).
@@ -240,4 +252,55 @@ func (m *Manager) Stats(ctx context.Context, id string) (Stat, error) {
 		return Stat{}, err
 	}
 	return s.Stats(ctx, sb.Ref)
+}
+
+func (m *Manager) histPath(id string) string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".peapod", "history", id+".jsonl")
+}
+
+// record appends an audit entry for a command run in the sandbox.
+func (m *Manager) record(id string, argv []string, res ExecResult) {
+	p := m.histPath(id)
+	if os.MkdirAll(filepath.Dir(p), 0o755) != nil {
+		return
+	}
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	preview := strings.TrimSpace(res.Stdout + res.Stderr)
+	if len(preview) > 200 {
+		preview = preview[:200] + "…"
+	}
+	b, _ := json.Marshal(HistoryEntry{
+		Time:     time.Now().UTC().Format(time.RFC3339),
+		Command:  strings.Join(argv, " "),
+		ExitCode: res.ExitCode,
+		Preview:  preview,
+	})
+	_, _ = f.Write(append(b, '\n'))
+}
+
+// History returns the recorded audit trail for a sandbox (oldest first).
+func (m *Manager) History(id string) ([]HistoryEntry, error) {
+	data, err := os.ReadFile(m.histPath(id))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []HistoryEntry
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var e HistoryEntry
+		if json.Unmarshal([]byte(line), &e) == nil {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }

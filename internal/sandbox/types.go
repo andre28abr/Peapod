@@ -87,3 +87,11 @@ type Stat struct {
 	MemUsage string `json:"mem_usage"`
 	MemPerc  string `json:"mem_perc"`
 }
+
+// HistoryEntry is one recorded command run inside a sandbox (the audit trail).
+type HistoryEntry struct {
+	Time     string `json:"time"`
+	Command  string `json:"command"`
+	ExitCode int    `json:"exit_code"`
+	Preview  string `json:"preview,omitempty"`
+}
