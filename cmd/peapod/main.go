@@ -36,6 +36,8 @@ commands:
   sandbox resume <id>
   sandbox checkpoint <id> <name>      (experimental; CRIU-capable engines)
   sandbox restore <id> <name>
+  sandbox logs <id> [--tail N]
+  sandbox stats <id>
   sandbox snapshot <id> <name>
   sandbox fork <snapshot> [--name N] [--net none|egress]
   snapshot ls
@@ -377,6 +379,32 @@ func runSandbox(ctx context.Context, args []string) {
 		}
 		check(mgr.Restore(ctx, args[1], args[2]))
 		fmt.Println("restored", args[1], "from", args[2])
+	case "logs":
+		fs := flag.NewFlagSet("logs", flag.ExitOnError)
+		tail := fs.Int("tail", 200, "lines from the end")
+		parseFlagsAnywhere(fs, args[1:])
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox logs <id> [--tail N]")
+			os.Exit(2)
+		}
+		out, err := mgr.Logs(ctx, fs.Arg(0), *tail)
+		check(err)
+		fmt.Print(out)
+	case "stats":
+		fs := flag.NewFlagSet("stats", flag.ExitOnError)
+		asJSON := fs.Bool("json", false, "output JSON")
+		parseFlagsAnywhere(fs, args[1:])
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox stats <id>")
+			os.Exit(2)
+		}
+		st, err := mgr.Stats(ctx, fs.Arg(0))
+		check(err)
+		if *asJSON {
+			_ = json.NewEncoder(os.Stdout).Encode(st)
+		} else {
+			fmt.Printf("CPU %s   MEM %s (%s)\n", st.CPUPerc, st.MemUsage, st.MemPerc)
+		}
 	case "snapshot":
 		if len(args) < 3 {
 			fmt.Fprintln(os.Stderr, "usage: peapod sandbox snapshot <id> <name>")
@@ -430,6 +458,7 @@ func parseFlagsAnywhere(fs *flag.FlagSet, args []string) {
 	valueFlag := map[string]bool{
 		"-name": true, "--name": true, "-net": true, "--net": true,
 		"-ports": true, "--ports": true, "-image": true, "--image": true,
+		"-tail": true, "--tail": true,
 	}
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {

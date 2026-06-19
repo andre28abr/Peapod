@@ -372,3 +372,42 @@ func (d *Driver) Restore(ctx context.Context, ref, name string) error {
 	}
 	return nil
 }
+
+// Logs returns the last `tail` lines of the container's output (stdout+stderr).
+func (d *Driver) Logs(ctx context.Context, ref string, tail int) (string, error) {
+	if tail <= 0 {
+		tail = 200
+	}
+	out, errOut, code, err := d.run(ctx, nil, "logs", "--tail", strconv.Itoa(tail), ref)
+	if err != nil {
+		return "", err
+	}
+	if code != 0 {
+		return "", fmt.Errorf("logs failed: %s", strings.TrimSpace(errOut))
+	}
+	return out + errOut, nil // docker splits container stdout/stderr across both
+}
+
+// Stats samples CPU and memory usage once (non-streaming).
+func (d *Driver) Stats(ctx context.Context, ref string) (sandbox.Stat, error) {
+	out, errOut, code, err := d.run(ctx, nil, "stats", "--no-stream",
+		"--format", "{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}", ref)
+	if err != nil {
+		return sandbox.Stat{}, err
+	}
+	if code != 0 {
+		return sandbox.Stat{}, fmt.Errorf("stats failed: %s", strings.TrimSpace(errOut))
+	}
+	f := strings.SplitN(strings.TrimSpace(out), "|", 3)
+	var st sandbox.Stat
+	if len(f) > 0 {
+		st.CPUPerc = f[0]
+	}
+	if len(f) > 1 {
+		st.MemUsage = f[1]
+	}
+	if len(f) > 2 {
+		st.MemPerc = f[2]
+	}
+	return st, nil
+}

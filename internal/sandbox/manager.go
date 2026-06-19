@@ -215,3 +215,29 @@ func (m *Manager) Restore(ctx context.Context, id, name string) error {
 	}
 	return c.Restore(ctx, sb.Ref, name)
 }
+
+// Logs returns recent output from a sandbox.
+func (m *Manager) Logs(ctx context.Context, id string, tail int) (string, error) {
+	l, ok := m.drv.(Logger)
+	if !ok {
+		return "", fmt.Errorf("backend %s does not support logs", m.drv.Name())
+	}
+	sb, err := m.drv.Resolve(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return l.Logs(ctx, sb.Ref, tail)
+}
+
+// Stats samples a sandbox's resource usage.
+func (m *Manager) Stats(ctx context.Context, id string) (Stat, error) {
+	s, ok := m.drv.(Statser)
+	if !ok {
+		return Stat{}, fmt.Errorf("backend %s does not support stats", m.drv.Name())
+	}
+	sb, err := m.drv.Resolve(ctx, id)
+	if err != nil {
+		return Stat{}, err
+	}
+	return s.Stats(ctx, sb.Ref)
+}

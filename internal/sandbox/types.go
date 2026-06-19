@@ -80,3 +80,10 @@ type Snapshot struct {
 	CreatedUnix int64  `json:"created_unix,omitempty"`
 	Size        string `json:"size,omitempty"`
 }
+
+// Stat is a point-in-time resource sample for a sandbox.
+type Stat struct {
+	CPUPerc  string `json:"cpu_perc"`
+	MemUsage string `json:"mem_usage"`
+	MemPerc  string `json:"mem_perc"`
+}

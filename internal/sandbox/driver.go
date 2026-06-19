@@ -65,3 +65,13 @@ type Checkpointer interface {
 	Checkpoint(ctx context.Context, ref, name string) error
 	Restore(ctx context.Context, ref, name string) error
 }
+
+// Logger is an optional capability: fetch a sandbox's recent log output.
+type Logger interface {
+	Logs(ctx context.Context, ref string, tail int) (string, error)
+}
+
+// Statser is an optional capability: sample a sandbox's resource usage.
+type Statser interface {
+	Stats(ctx context.Context, ref string) (Stat, error)
+}
