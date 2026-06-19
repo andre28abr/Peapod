@@ -67,8 +67,9 @@ type ExecResult struct {
 
 // Snapshot is a saved sandbox image that can be forked.
 type Snapshot struct {
-	Ref     string `json:"ref"`
-	Name    string `json:"name"`
-	Created string `json:"created,omitempty"`
-	Size    string `json:"size,omitempty"`
+	Ref         string `json:"ref"`
+	Name        string `json:"name"`
+	Created     string `json:"created,omitempty"`
+	CreatedUnix int64  `json:"created_unix,omitempty"`
+	Size        string `json:"size,omitempty"`
 }

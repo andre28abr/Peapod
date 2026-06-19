@@ -140,7 +140,8 @@ func (d *Driver) Snapshot(_ context.Context, ref, name string) (string, error) {
 		cp[k] = cloneBytes(v)
 	}
 	d.snaps[snapRef] = cp
-	d.snapMeta[snapRef] = sandbox.Snapshot{Ref: snapRef, Name: name, Created: time.Now().UTC().Format(time.RFC3339)}
+	now := time.Now()
+	d.snapMeta[snapRef] = sandbox.Snapshot{Ref: snapRef, Name: name, Created: now.UTC().Format(time.RFC3339), CreatedUnix: now.Unix()}
 	return snapRef, nil
 }
 

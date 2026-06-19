@@ -36,6 +36,7 @@ commands:
   sandbox fork <snapshot> [--name N] [--net none|egress]
   snapshot ls
   snapshot rm <ref>
+  snapshot prune [--max-age 24h]
   preview up [--image IMG] [--net none|egress]    sandbox for the current git branch
   preview status
   preview down
@@ -169,6 +170,16 @@ func runSnapshot(ctx context.Context, args []string) {
 		}
 		check(mgr.RemoveSnapshot(ctx, args[1]))
 		fmt.Println("removed", args[1])
+	case "prune":
+		fs := flag.NewFlagSet("prune", flag.ExitOnError)
+		maxAge := fs.Duration("max-age", 24*time.Hour, "remove snapshots older than this")
+		_ = fs.Parse(args[1:])
+		removed, err := mgr.PruneSnapshots(ctx, *maxAge)
+		check(err)
+		fmt.Printf("pruned %d snapshot(s)\n", len(removed))
+		for _, r := range removed {
+			fmt.Println("  -", r)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown snapshot subcommand %q\n", args[0])
 		os.Exit(2)

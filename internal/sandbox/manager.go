@@ -152,6 +152,25 @@ func (m *Manager) RemoveSnapshot(ctx context.Context, ref string) error {
 	return m.drv.RemoveSnapshot(ctx, ref)
 }
 
+// PruneSnapshots removes snapshots older than maxAge; returns the refs removed.
+func (m *Manager) PruneSnapshots(ctx context.Context, maxAge time.Duration) ([]string, error) {
+	snaps, err := m.drv.ListSnapshots(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().Add(-maxAge).Unix()
+	var removed []string
+	for _, s := range snaps {
+		if s.CreatedUnix == 0 || s.CreatedUnix >= cutoff {
+			continue
+		}
+		if err := m.drv.RemoveSnapshot(ctx, s.Ref); err == nil {
+			removed = append(removed, s.Ref)
+		}
+	}
+	return removed, nil
+}
+
 // Pause freezes a sandbox's processes (memory preserved, zero CPU).
 func (m *Manager) Pause(ctx context.Context, id string) error {
 	sb, err := m.drv.Resolve(ctx, id)

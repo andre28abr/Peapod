@@ -119,6 +119,30 @@ func New(mgr *sandbox.Manager) *mcp.Server {
 		return nil, asCreateOut(sb), nil
 	})
 
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "peapod_snapshot_list",
+		Description: "List saved snapshots.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ emptyIn) (*mcp.CallToolResult, snapListOut, error) {
+		snaps, err := mgr.ListSnapshots(ctx)
+		if err != nil {
+			return nil, snapListOut{}, err
+		}
+		if snaps == nil {
+			snaps = []sandbox.Snapshot{}
+		}
+		return nil, snapListOut{Snapshots: snaps}, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "peapod_snapshot_remove",
+		Description: "Delete a snapshot by ref.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in snapRefIn) (*mcp.CallToolResult, okOut, error) {
+		if err := mgr.RemoveSnapshot(ctx, in.Ref); err != nil {
+			return nil, okOut{}, err
+		}
+		return nil, okOut{OK: true}, nil
+	})
+
 	return s
 }
 
@@ -218,6 +242,14 @@ type snapIn struct {
 
 type snapOut struct {
 	Snapshot string `json:"snapshot"`
+}
+
+type snapListOut struct {
+	Snapshots []sandbox.Snapshot `json:"snapshots"`
+}
+
+type snapRefIn struct {
+	Ref string `json:"ref" jsonschema:"snapshot ref from peapod_snapshot"`
 }
 
 type forkIn struct {

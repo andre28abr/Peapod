@@ -274,7 +274,7 @@ func (d *Driver) Fork(ctx context.Context, snapshotRef string, spec sandbox.Spec
 func (d *Driver) ListSnapshots(ctx context.Context) ([]sandbox.Snapshot, error) {
 	out, _, code, err := d.run(ctx, nil, "images",
 		"--filter", "reference=peapod-snapshot",
-		"--format", "{{.Repository}}:{{.Tag}}|{{.Tag}}|{{.CreatedSince}}|{{.Size}}")
+		"--format", "{{.Repository}}:{{.Tag}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}")
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +293,13 @@ func (d *Driver) ListSnapshots(ctx context.Context) ([]sandbox.Snapshot, error) 
 		}
 		if len(f) > 2 {
 			s.Created = f[2]
+			// docker CreatedAt looks like "2026-06-19 09:26:18 -0300 -03"; the
+			// trailing zone abbreviation isn't Go-parseable, so drop it.
+			if p := strings.Fields(f[2]); len(p) >= 3 {
+				if t, perr := time.Parse("2006-01-02 15:04:05 -0700", strings.Join(p[:3], " ")); perr == nil {
+					s.CreatedUnix = t.Unix()
+				}
+			}
 		}
 		if len(f) > 3 {
 			s.Size = f[3]
