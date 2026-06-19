@@ -347,3 +347,28 @@ func (d *Driver) Resume(ctx context.Context, ref string) error {
 	}
 	return nil
 }
+
+// Checkpoint persists the container's running state to disk (docker checkpoint).
+// Experimental: needs a CRIU-capable engine. Note: restore is broken on OrbStack.
+func (d *Driver) Checkpoint(ctx context.Context, ref, name string) error {
+	_, errOut, code, err := d.run(ctx, nil, "checkpoint", "create", ref, name)
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		return fmt.Errorf("checkpoint failed: %s", strings.TrimSpace(errOut))
+	}
+	return nil
+}
+
+// Restore restarts the container from a checkpoint (docker start --checkpoint).
+func (d *Driver) Restore(ctx context.Context, ref, name string) error {
+	_, errOut, code, err := d.run(ctx, nil, "start", "--checkpoint", name, ref)
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		return fmt.Errorf("restore failed: %s", strings.TrimSpace(errOut))
+	}
+	return nil
+}

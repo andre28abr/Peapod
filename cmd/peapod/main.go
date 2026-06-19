@@ -34,6 +34,8 @@ commands:
   sandbox rm <id>
   sandbox pause <id>
   sandbox resume <id>
+  sandbox checkpoint <id> <name>      (experimental; CRIU-capable engines)
+  sandbox restore <id> <name>
   sandbox snapshot <id> <name>
   sandbox fork <snapshot> [--name N] [--net none|egress]
   snapshot ls
@@ -349,6 +351,20 @@ func runSandbox(ctx context.Context, args []string) {
 		}
 		check(mgr.Resume(ctx, args[1]))
 		fmt.Println("resumed", args[1])
+	case "checkpoint":
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox checkpoint <id> <name>")
+			os.Exit(2)
+		}
+		check(mgr.Checkpoint(ctx, args[1], args[2]))
+		fmt.Println("checkpointed", args[1], "->", args[2])
+	case "restore":
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox restore <id> <name>")
+			os.Exit(2)
+		}
+		check(mgr.Restore(ctx, args[1], args[2]))
+		fmt.Println("restored", args[1], "from", args[2])
 	case "snapshot":
 		if len(args) < 3 {
 			fmt.Fprintln(os.Stderr, "usage: peapod sandbox snapshot <id> <name>")

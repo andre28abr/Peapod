@@ -188,3 +188,30 @@ func (m *Manager) Resume(ctx context.Context, id string) error {
 	}
 	return m.drv.Resume(ctx, sb.Ref)
 }
+
+// Checkpoint persists a running sandbox's state to disk (experimental; needs a
+// CRIU-capable backend).
+func (m *Manager) Checkpoint(ctx context.Context, id, name string) error {
+	c, ok := m.drv.(Checkpointer)
+	if !ok {
+		return fmt.Errorf("backend %s does not support checkpoint", m.drv.Name())
+	}
+	sb, err := m.drv.Resolve(ctx, id)
+	if err != nil {
+		return err
+	}
+	return c.Checkpoint(ctx, sb.Ref, name)
+}
+
+// Restore restarts a sandbox from a checkpoint (experimental).
+func (m *Manager) Restore(ctx context.Context, id, name string) error {
+	c, ok := m.drv.(Checkpointer)
+	if !ok {
+		return fmt.Errorf("backend %s does not support restore", m.drv.Name())
+	}
+	sb, err := m.drv.Resolve(ctx, id)
+	if err != nil {
+		return err
+	}
+	return c.Restore(ctx, sb.Ref, name)
+}

@@ -57,3 +57,11 @@ type ExecOpts struct {
 	Env     map[string]string
 	Timeout time.Duration // 0 = no timeout
 }
+
+// Checkpointer is an optional capability: persist a running sandbox's memory
+// state to disk (CRIU) and restore it later. A driver implements it only if the
+// backend supports it; the Manager checks via a type assertion.
+type Checkpointer interface {
+	Checkpoint(ctx context.Context, ref, name string) error
+	Restore(ctx context.Context, ref, name string) error
+}
