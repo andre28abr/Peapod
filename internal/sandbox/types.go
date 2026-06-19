@@ -32,6 +32,12 @@ type Mount struct {
 	ReadOnly bool   `json:"read_only,omitempty"`
 }
 
+// Port publishes a container port on the host.
+type Port struct {
+	Host      int `json:"host"`
+	Container int `json:"container"`
+}
+
 // Spec describes a sandbox to create.
 type Spec struct {
 	Image     string            `json:"image"`
@@ -41,6 +47,7 @@ type Spec struct {
 	Env       map[string]string `json:"env,omitempty"`
 	Resources Resources         `json:"resources,omitempty"`
 	Mounts    []Mount           `json:"mounts,omitempty"`
+	Ports     []Port            `json:"ports,omitempty"`
 	// Labels carries internal metadata (e.g. peapod.id). The Manager fills it in.
 	Labels map[string]string `json:"-"`
 }

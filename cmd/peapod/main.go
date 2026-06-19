@@ -3,11 +3,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -26,7 +28,7 @@ usage:
 commands:
   mcp                                 start the MCP server (stdio)
   ui [--addr 127.0.0.1:7070]          start the local web dashboard
-  sandbox create <image> [--name N] [--net none|egress]
+  sandbox create <image> [--name N] [--net none|egress] [--ports h:c,...]
   sandbox ls
   sandbox exec <id> <cmd>...
   sandbox rm <id>
@@ -41,6 +43,9 @@ commands:
   preview status
   preview down
   reap [--max-age 30m]                destroy sandboxes older than max-age
+  up [-f peapod.json]                 start a multi-service group
+  down [-f peapod.json]               stop the group
+  ps [-f peapod.json]                 list the group
   version
 
 backend also via env PEAPOD_BACKEND (default: oci)
@@ -68,6 +73,12 @@ func main() {
 		runPreview(ctx, args[1:])
 	case "reap":
 		runReap(ctx, args[1:])
+	case "up":
+		runUp(ctx, args[1:])
+	case "down":
+		runDown(ctx, args[1:])
+	case "ps":
+		runPs(ctx, args[1:])
 	case "version":
 		fmt.Println("peapod 0.1.0")
 	case "-h", "--help", "help":
@@ -283,12 +294,15 @@ func runSandbox(ctx context.Context, args []string) {
 		fs := flag.NewFlagSet("create", flag.ExitOnError)
 		name := fs.String("name", "", "human label")
 		net := fs.String("net", "none", "network policy: none|egress")
-		_ = fs.Parse(args[1:])
+		portsArg := fs.String("ports", "", "comma-separated host:container ports")
+		parseFlagsAnywhere(fs, args[1:])
 		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "usage: peapod sandbox create <image> [--name N] [--net none|egress]")
+			fmt.Fprintln(os.Stderr, "usage: peapod sandbox create <image> [--name N] [--net none|egress] [--ports h:c,...]")
 			os.Exit(2)
 		}
-		sb, err := mgr.Create(ctx, sandbox.Spec{Image: fs.Arg(0), Name: *name, Network: sandbox.NetworkPolicy(*net)})
+		ports, err := parsePorts(splitComma(*portsArg))
+		check(err)
+		sb, err := mgr.Create(ctx, sandbox.Spec{Image: fs.Arg(0), Name: *name, Network: sandbox.NetworkPolicy(*net), Ports: ports})
 		check(err)
 		fmt.Println(sb.ID)
 	case "ls":
@@ -347,7 +361,7 @@ func runSandbox(ctx context.Context, args []string) {
 		fs := flag.NewFlagSet("fork", flag.ExitOnError)
 		name := fs.String("name", "", "human label")
 		net := fs.String("net", "none", "network policy: none|egress")
-		_ = fs.Parse(args[1:])
+		parseFlagsAnywhere(fs, args[1:])
 		if fs.NArg() < 1 {
 			fmt.Fprintln(os.Stderr, "usage: peapod sandbox fork <snapshot> [--name N] [--net none|egress]")
 			os.Exit(2)
@@ -359,6 +373,195 @@ func runSandbox(ctx context.Context, args []string) {
 		fmt.Fprintf(os.Stderr, "unknown sandbox subcommand %q\n", args[0])
 		os.Exit(2)
 	}
+}
+
+type manifest struct {
+	Name     string                     `json:"name"`
+	Services map[string]manifestService `json:"services"`
+}
+
+type manifestService struct {
+	Image   string            `json:"image"`
+	Network string            `json:"network"`
+	Ports   []string          `json:"ports"`
+	Mounts  []string          `json:"mounts"`
+	Env     map[string]string `json:"env"`
+	Workdir string            `json:"workdir"`
+}
+
+func splitComma(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.Split(s, ",")
+}
+
+// parseFlagsAnywhere lets flags appear after positional args (Go's flag package
+// stops at the first non-flag token). It reorders value-taking flags to the front.
+func parseFlagsAnywhere(fs *flag.FlagSet, args []string) {
+	valueFlag := map[string]bool{
+		"-name": true, "--name": true, "-net": true, "--net": true,
+		"-ports": true, "--ports": true, "-image": true, "--image": true,
+	}
+	var flags, pos []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "-") {
+			flags = append(flags, a)
+			if !strings.Contains(a, "=") && valueFlag[a] && i+1 < len(args) {
+				i++
+				flags = append(flags, args[i])
+			}
+		} else {
+			pos = append(pos, a)
+		}
+	}
+	_ = fs.Parse(append(flags, pos...))
+}
+
+func parsePorts(ss []string) ([]sandbox.Port, error) {
+	var ports []sandbox.Port
+	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		var h, c int
+		if _, err := fmt.Sscanf(s, "%d:%d", &h, &c); err != nil {
+			return nil, fmt.Errorf("bad port %q (want host:container)", s)
+		}
+		ports = append(ports, sandbox.Port{Host: h, Container: c})
+	}
+	return ports, nil
+}
+
+func parseMounts(ss []string, base string) []sandbox.Mount {
+	var ms []sandbox.Mount
+	for _, s := range ss {
+		parts := strings.SplitN(s, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		host := parts[0]
+		if !filepath.IsAbs(host) {
+			host = filepath.Join(base, host)
+		}
+		ms = append(ms, sandbox.Mount{Host: host, Target: parts[1]})
+	}
+	return ms
+}
+
+func loadManifest(path string) (manifest, string, error) {
+	base, _ := filepath.Abs(filepath.Dir(path))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return manifest{}, base, err
+	}
+	var m manifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		return manifest{}, base, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if m.Name == "" {
+		m.Name = filepath.Base(base)
+	}
+	return m, base, nil
+}
+
+func groupName(path string) string {
+	if m, _, err := loadManifest(path); err == nil {
+		return m.Name
+	}
+	wd, _ := os.Getwd()
+	return filepath.Base(wd)
+}
+
+func runUp(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("up", flag.ExitOnError)
+	file := fs.String("f", "peapod.json", "manifest file")
+	_ = fs.Parse(args)
+	m, base, err := loadManifest(*file)
+	check(err)
+	if len(m.Services) == 0 {
+		fmt.Fprintln(os.Stderr, "no services in", *file)
+		os.Exit(1)
+	}
+	mgr := newManager()
+	existing := map[string]bool{}
+	if boxes, e := mgr.List(ctx); e == nil {
+		for _, b := range boxes {
+			existing[b.Name] = true
+		}
+	}
+	names := make([]string, 0, len(m.Services))
+	for k := range m.Services {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, svc := range names {
+		s := m.Services[svc]
+		full := m.Name + "-" + svc
+		if existing[full] {
+			fmt.Printf("%s already up\n", full)
+			continue
+		}
+		ports, err := parsePorts(s.Ports)
+		check(err)
+		net := s.Network
+		if net == "" {
+			net = "egress"
+		}
+		sb, err := mgr.Create(ctx, sandbox.Spec{
+			Image: s.Image, Name: full, Network: sandbox.NetworkPolicy(net),
+			Workdir: s.Workdir, Env: s.Env, Ports: ports, Mounts: parseMounts(s.Mounts, base),
+		})
+		check(err)
+		fmt.Printf("up %s: %s\n", full, sb.ID)
+	}
+}
+
+func runDown(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("down", flag.ExitOnError)
+	file := fs.String("f", "peapod.json", "manifest file")
+	_ = fs.Parse(args)
+	mgr := newManager()
+	prefix := groupName(*file) + "-"
+	boxes, err := mgr.List(ctx)
+	check(err)
+	n := 0
+	for _, b := range boxes {
+		if strings.HasPrefix(b.Name, prefix) {
+			if mgr.Destroy(ctx, b.ID) == nil {
+				fmt.Printf("down %s (%s)\n", b.Name, b.ID)
+				n++
+			}
+		}
+	}
+	if n == 0 {
+		fmt.Printf("nothing to bring down for group %q\n", strings.TrimSuffix(prefix, "-"))
+	}
+}
+
+func runPs(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("ps", flag.ExitOnError)
+	file := fs.String("f", "peapod.json", "manifest file")
+	_ = fs.Parse(args)
+	mgr := newManager()
+	prefix := groupName(*file) + "-"
+	boxes, err := mgr.List(ctx)
+	check(err)
+	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "SERVICE\tID\tIMAGE\tNETWORK\tSTATUS")
+	for _, b := range boxes {
+		if !strings.HasPrefix(b.Name, prefix) {
+			continue
+		}
+		status := "running"
+		if b.Paused {
+			status = "paused"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", strings.TrimPrefix(b.Name, prefix), b.ID, b.Image, b.Network, status)
+	}
+	_ = tw.Flush()
 }
 
 func check(err error) {

@@ -118,6 +118,9 @@ func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
 		}
 		args = append(args, "-v", v)
 	}
+	for _, p := range spec.Ports {
+		args = append(args, "-p", fmt.Sprintf("%d:%d", p.Host, p.Container))
+	}
 	for k, v := range spec.Env {
 		args = append(args, "-e", k+"="+v)
 	}
