@@ -308,8 +308,20 @@ func runSandbox(ctx context.Context, args []string) {
 		check(err)
 		fmt.Println(sb.ID)
 	case "ls":
+		fs := flag.NewFlagSet("ls", flag.ExitOnError)
+		asJSON := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args[1:])
 		boxes, err := mgr.List(ctx)
 		check(err)
+		if boxes == nil {
+			boxes = []sandbox.Sandbox{}
+		}
+		if *asJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			_ = enc.Encode(boxes)
+			return
+		}
 		tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 		fmt.Fprintln(tw, "ID\tIMAGE\tNETWORK\tSTATUS\tNAME")
 		for _, b := range boxes {

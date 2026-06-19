@@ -61,10 +61,13 @@ Then an agent can call `peapod_sandbox_create` → `peapod_write_file` →
 
 ```sh
 peapod ui                     # local web dashboard at http://127.0.0.1:7070
+peapod up / down / ps         # multi-service group from a peapod.json manifest
 peapod sandbox pause <id>     # freeze a sandbox (memory preserved, zero CPU)
 peapod sandbox resume <id>    # unfreeze it
+peapod sandbox ls --json      # machine-readable list (used by the native app)
 peapod snapshot ls            # list snapshots
 peapod snapshot rm <ref>      # delete a snapshot
+peapod snapshot prune --max-age 24h
 peapod preview up             # sandbox for the current git branch (repo at /repo)
 peapod preview status
 peapod preview down
@@ -80,5 +83,6 @@ peapod --backend apple ...    # microVM isolation (macOS 26 + apple/container)
   and `pause` / `resume` to freeze a running sandbox (memory preserved, zero CPU).
   Disk-persisted CRIU checkpoint is not used — `docker checkpoint` *restore* is broken
   on OrbStack.
-- **Phase 3 (started):** per-branch preview envs (`preview up/status/down`) and a
-  minimal web dashboard (`peapod ui`) both work; a native UI comes later.
+- **Phase 3:** per-branch preview envs (`preview up/status/down`), multi-service
+  groups (`up/down/ps` + ports), a web dashboard (`peapod ui`), and a native
+  macOS menu-bar app (`ui-native/`). A richer native UI (stats, logs) is next.
