@@ -1,25 +1,26 @@
-# Peapod native UI (menu bar)
+# Peapod native app (macOS)
 
-A minimal native macOS menu-bar app (SwiftUI) that lists, creates, and destroys
-Peapod sandboxes by shelling out to the `peapod` CLI (`sandbox ls --json`).
+A native SwiftUI app (a normal window) to list, create, pause/resume, and destroy
+Peapod sandboxes. The `peapod` CLI is bundled **inside** the app, so there's
+nothing to configure — just open it. Requires OrbStack (or Docker) running.
 
-This is the Phase 3 native-UI starting point — intentionally small. The richer
-app (live stats, logs, pause/resume, snapshots) builds on the same approach.
-
-## Build
+## Build it
 
 ```sh
-./build.sh        # produces Peapod.app (needs the Swift toolchain / Xcode CLT)
+./build.sh
 ```
 
-## Run
+This produces two things in this folder:
 
-The app calls the `peapod` binary. Point it at your build (or copy `peapod` to
-`/usr/local/bin`):
+- `Peapod.app` — **double-click to run.**
+- `Peapod.dmg` — double-click, then **drag Peapod into Applications**, and launch
+  it from Launchpad/Applications.
 
-```sh
-PEAPOD_BIN="$(cd ../bin && pwd)/peapod" open Peapod.app
-```
+> First launch: because the app isn't signed with an Apple Developer ID, macOS may
+> ask you to confirm. If it says "unidentified developer", right-click the app →
+> **Open** → **Open**, or allow it in System Settings → Privacy & Security.
 
-A 🫛-ish box icon appears in the menu bar; click it to manage sandboxes.
-(Requires OrbStack/Docker running for the `oci` backend.)
+## What you'll see
+
+A window listing your sandboxes (id, image, network, status) with buttons to
+create a new one, pause/resume, and delete. It refreshes automatically.

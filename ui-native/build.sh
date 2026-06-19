@@ -1,22 +1,49 @@
 #!/bin/bash
-# Build the native menu-bar app into Peapod.app.
+# Build a self-contained Peapod.app (with the peapod CLI bundled inside) and a
+# Peapod.dmg installer. Needs the Go toolchain and the Swift toolchain (Xcode CLT).
 set -e
 cd "$(dirname "$0")"
+ROOT="$(cd .. && pwd)"
 APP="Peapod.app"
+
+echo "==> building peapod CLI (Go)"
+( cd "$ROOT" && go build -o ui-native/peapod-bin ./cmd/peapod )
+
+echo "==> building app (Swift)"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -parse-as-library -O -o "$APP/Contents/MacOS/Peapod" Peapod.swift
+mv peapod-bin "$APP/Contents/Resources/peapod"
+chmod +x "$APP/Contents/Resources/peapod"
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleName</key><string>Peapod</string>
+  <key>CFBundleDisplayName</key><string>Peapod</string>
   <key>CFBundleIdentifier</key><string>dev.peapod.ui</string>
   <key>CFBundleExecutable</key><string>Peapod</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>LSUIElement</key><true/>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-echo "built $APP"
-echo "run:  PEAPOD_BIN=\"$(cd ../bin 2>/dev/null && pwd)/peapod\" open $APP"
+
+echo "==> signing (ad-hoc)"
+codesign --force --deep --sign - "$APP" 2>/dev/null || echo "   (codesign skipped)"
+
+echo "==> building dmg"
+STAGE="$(mktemp -d)"
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+rm -f Peapod.dmg
+hdiutil create -volname "Peapod" -srcfolder "$STAGE" -ov -quiet -format UDZO Peapod.dmg
+rm -rf "$STAGE"
+
+echo ""
+echo "done:"
+echo "  $(pwd)/$APP        — double-click to run"
+echo "  $(pwd)/Peapod.dmg  — double-click, then drag Peapod into Applications"
+echo "Requires OrbStack (or Docker) running."
