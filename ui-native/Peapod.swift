@@ -76,6 +76,12 @@ func fetchStats(_ id: String) -> Stat? {
     return try? JSONDecoder().decode(Stat.self, from: d)
 }
 
+// execCmd runs a shell command in the sandbox (off the main thread).
+func execCmd(_ id: String, _ command: String) -> String {
+    let r = runPeapod(["sandbox", "exec", id, "sh", "-lc", command])
+    return r.out + r.err
+}
+
 @MainActor
 final class Model: ObservableObject {
     @Published var boxes: [Sandbox] = []
@@ -164,7 +170,10 @@ struct DetailView: View {
     @State private var history: [HistoryEntry] = []
     @State private var cpuHist: [Double] = []
     @State private var memHist: [Double] = []
-    @State private var tab = 1 // 0 = Logs, 1 = History
+    @State private var cmd = ""
+    @State private var cmdOut = ""
+    @State private var running = false
+    @State private var tab = 1 // 0 = Logs, 1 = History, 2 = Run
     private let sampleTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -191,44 +200,65 @@ struct DetailView: View {
             Picker("", selection: $tab) {
                 Text("History").tag(1)
                 Text("Logs").tag(0)
+                Text("Run").tag(2)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            ScrollView {
-                if tab == 0 {
-                    Text(logs)
+            if tab == 2 {
+                HStack {
+                    TextField("command, e.g. ls -la /work", text: $cmd)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { runCmd() }
+                    Button("Run") { runCmd() }.disabled(running)
+                }
+                ScrollView {
+                    Text(cmdOut.isEmpty ? "Run a command inside the sandbox." : cmdOut)
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
+                        .foregroundColor(cmdOut.isEmpty ? .secondary : .primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
-                } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if history.isEmpty {
-                            Text("No commands recorded yet.").font(.caption).foregroundColor(.secondary)
-                        }
-                        ForEach(Array(history.enumerated()), id: \.offset) { _, e in
-                            VStack(alignment: .leading, spacing: 1) {
-                                HStack {
-                                    Text(e.command).font(.system(.caption, design: .monospaced))
-                                    Spacer()
-                                    Text("exit \(e.exit_code)")
-                                        .font(.caption2)
-                                        .foregroundColor(e.exit_code == 0 ? .secondary : .red)
-                                }
-                                if let p = e.preview, !p.isEmpty {
-                                    Text(p).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+                }
+                .frame(minHeight: 200)
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(6)
+            } else {
+                ScrollView {
+                    if tab == 0 {
+                        Text(logs)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if history.isEmpty {
+                                Text("No commands recorded yet.").font(.caption).foregroundColor(.secondary)
+                            }
+                            ForEach(Array(history.enumerated()), id: \.offset) { _, e in
+                                VStack(alignment: .leading, spacing: 1) {
+                                    HStack {
+                                        Text(e.command).font(.system(.caption, design: .monospaced))
+                                        Spacer()
+                                        Text("exit \(e.exit_code)")
+                                            .font(.caption2)
+                                            .foregroundColor(e.exit_code == 0 ? .secondary : .red)
+                                    }
+                                    if let p = e.preview, !p.isEmpty {
+                                        Text(p).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+                                    }
                                 }
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
                 }
+                .frame(minHeight: 220)
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(6)
             }
-            .frame(minHeight: 220)
-            .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(6)
         }
         .padding(16)
         .frame(width: 560, height: 420)
@@ -257,6 +287,22 @@ struct DetailView: View {
 
     private func pct(_ s: String) -> Double {
         Double(s.replacingOccurrences(of: "%", with: "")) ?? 0
+    }
+
+    private func runCmd() {
+        let c = cmd.trimmingCharacters(in: .whitespaces)
+        if c.isEmpty { return }
+        let id = box.id
+        running = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let out = execCmd(id, c)
+            DispatchQueue.main.async {
+                cmdOut = out.trimmingCharacters(in: .whitespacesAndNewlines)
+                if cmdOut.isEmpty { cmdOut = "(no output)" }
+                running = false
+                history = model.history(id)
+            }
+        }
     }
 }
 
