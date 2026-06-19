@@ -57,6 +57,38 @@ Deixar uma IA rodar código direto na sua máquina é risco: um bug ou uma depen
 - **Efêmero** — sem retenção de dados além do necessário.
 - **Limites de recurso** — CPU, memória e PIDs por sandbox.
 
+## 💡 Como usar — o jeito certo
+
+O Peapod **não é "mais um Docker"**. O uso mais valioso dele é como **rede de proteção para a IA rodar código** — a ideia é deixar o agente trabalhar *dentro* do Peapod, não no seu Mac.
+
+### Caso principal — guarda-costas dos agentes de IA
+
+Com o `.mcp.json`, o Peapod já aparece como ferramenta no Claude Code (e similares). Sempre que for pedir à IA para executar algo em que você **não confia 100%** — um script de um gist, uma dependência duvidosa, um `curl | bash`, ou código que a própria IA acabou de gerar — peça para rodar **num sandbox do Peapod**:
+
+> *"Tem um script Python nesse link que diz redimensionar imagens, mas não confio. **Roda num sandbox do Peapod** e me diz o que ele faz."*
+
+O agente, sozinho, cria o sandbox (sem rede), executa o código isolado, te devolve a saída, registra cada comando na **trilha de auditoria** e descarta tudo no fim. O seu computador nunca é tocado — e você pode revisar exatamente o que rodou.
+
+### Caso casual — rascunho descartável
+
+"Quero testar uma coisa sem sujar meu Mac." Abra o **app**, escolha um **template** (Python, Postgres, Node…), use a aba **Run** e descarte. No terminal é o mesmo: `sandbox create` → mexer → `sandbox rm`.
+
+### Modelo mental (para quem já conhece contêiner)
+
+Pense no Peapod como **`docker run --rm` com três superpoderes**:
+
+| Superpoder | O que isso te dá |
+|---|---|
+| 🔒 **Seguro por padrão** | sem rede e com limites de CPU/mem/PID; quando o código precisa de internet (ex.: `pip install`), você libera **só** os domínios necessários com `--allow pypi.org` |
+| 🧾 **Com memória** | trilha de auditoria de todos os comandos que rodaram no sandbox |
+| 🤖 **Dirigível por IA** | exposto via MCP, o agente cria, roda e descarta sozinho |
+
+A diferença para o Docker cru não é *rodar contêiner* — é o **contexto de segurança, auditoria e IA** em volta.
+
+### Para que **não** serve
+
+Não é para rodar serviços de produção nem substituir o Docker Desktop em apps de longa duração. É para execução **efêmera, isolada e não-confiável** — o "laboratório selado", não o servidor.
+
 ## 🚀 Começando
 
 ```sh
