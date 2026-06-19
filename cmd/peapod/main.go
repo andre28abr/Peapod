@@ -48,6 +48,7 @@ commands:
   preview status
   preview down
   reap [--max-age 30m]                destroy sandboxes older than max-age
+  pause-idle [--max-idle 15m]         pause sandboxes idle for too long
   up [-f peapod.json]                 start a multi-service group
   down [-f peapod.json]               stop the group
   ps [-f peapod.json]                 list the group
@@ -78,6 +79,8 @@ func main() {
 		runPreview(ctx, args[1:])
 	case "reap":
 		runReap(ctx, args[1:])
+	case "pause-idle":
+		runPauseIdle(ctx, args[1:])
 	case "up":
 		runUp(ctx, args[1:])
 	case "down":
@@ -158,6 +161,19 @@ func runReap(ctx context.Context, args []string) {
 	ids, err := mgr.Reap(ctx, *maxAge)
 	check(err)
 	fmt.Printf("reaped %d sandbox(es)\n", len(ids))
+	for _, id := range ids {
+		fmt.Println("  -", id)
+	}
+}
+
+func runPauseIdle(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("pause-idle", flag.ExitOnError)
+	maxIdle := fs.Duration("max-idle", 15*time.Minute, "pause sandboxes idle longer than this")
+	_ = fs.Parse(args)
+	mgr := newManager()
+	ids, err := mgr.PauseIdle(ctx, *maxIdle)
+	check(err)
+	fmt.Printf("paused %d idle sandbox(es)\n", len(ids))
 	for _, id := range ids {
 		fmt.Println("  -", id)
 	}

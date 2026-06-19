@@ -77,6 +77,11 @@ func (m *Manager) Exec(ctx context.Context, id string, argv []string, opts ExecO
 	if err != nil {
 		return ExecResult{}, err
 	}
+	if sb.Paused { // auto-resume an idle-paused sandbox before running
+		if rerr := m.drv.Resume(ctx, sb.Ref); rerr == nil {
+			sb.Paused = false
+		}
+	}
 	if opts.Workdir == "" {
 		opts.Workdir = sb.Workdir
 	}
@@ -281,6 +286,35 @@ func (m *Manager) record(id string, argv []string, res ExecResult) {
 		Preview:  preview,
 	})
 	_, _ = f.Write(append(b, '\n'))
+}
+
+// lastActivity is the time of the sandbox's most recent exec (history file
+// mtime), falling back to its creation time.
+func (m *Manager) lastActivity(b Sandbox) time.Time {
+	if fi, err := os.Stat(m.histPath(b.ID)); err == nil {
+		return fi.ModTime()
+	}
+	return b.Created
+}
+
+// PauseIdle pauses running sandboxes with no activity for longer than maxIdle.
+// They auto-resume on the next exec. Returns the ids paused.
+func (m *Manager) PauseIdle(ctx context.Context, maxIdle time.Duration) ([]string, error) {
+	boxes, err := m.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().Add(-maxIdle)
+	var paused []string
+	for _, b := range boxes {
+		if b.Paused || m.lastActivity(b).After(cutoff) {
+			continue
+		}
+		if err := m.drv.Pause(ctx, b.Ref); err == nil {
+			paused = append(paused, b.ID)
+		}
+	}
+	return paused, nil
 }
 
 // History returns the recorded audit trail for a sandbox (oldest first).

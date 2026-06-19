@@ -169,7 +169,27 @@ func Serve(ctx context.Context, mgr *sandbox.Manager) error {
 			go reapLoop(ctx, mgr, d)
 		}
 	}
+	if ttl := os.Getenv("PEAPOD_IDLE_PAUSE_TTL"); ttl != "" {
+		if d, err := time.ParseDuration(ttl); err == nil && d > 0 {
+			go idlePauseLoop(ctx, mgr, d)
+		}
+	}
 	return New(mgr).Run(ctx, &mcp.StdioTransport{})
+}
+
+func idlePauseLoop(ctx context.Context, mgr *sandbox.Manager, ttl time.Duration) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if ids, err := mgr.PauseIdle(ctx, ttl); err == nil && len(ids) > 0 {
+				fmt.Fprintf(os.Stderr, "peapod: paused %d idle sandbox(es): %v\n", len(ids), ids)
+			}
+		}
+	}
 }
 
 func reapLoop(ctx context.Context, mgr *sandbox.Manager, ttl time.Duration) {
