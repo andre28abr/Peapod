@@ -88,6 +88,12 @@ type Stat struct {
 	MemPerc  string `json:"mem_perc"`
 }
 
+// SnapshotDiff lists files added/removed between two snapshots.
+type SnapshotDiff struct {
+	Added   []string `json:"added"`
+	Removed []string `json:"removed"`
+}
+
 // HistoryEntry is one recorded command run inside a sandbox (the audit trail).
 type HistoryEntry struct {
 	Time     string `json:"time"`

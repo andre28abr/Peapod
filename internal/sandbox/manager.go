@@ -169,6 +169,15 @@ func (m *Manager) RemoveSnapshot(ctx context.Context, ref string) error {
 	return m.drv.RemoveSnapshot(ctx, ref)
 }
 
+// DiffSnapshots returns the files added/removed between two snapshots.
+func (m *Manager) DiffSnapshots(ctx context.Context, a, b string) (SnapshotDiff, error) {
+	d, ok := m.drv.(SnapshotDiffer)
+	if !ok {
+		return SnapshotDiff{}, fmt.Errorf("backend %s does not support snapshot diff", m.drv.Name())
+	}
+	return d.DiffSnapshots(ctx, a, b)
+}
+
 // PruneSnapshots removes snapshots older than maxAge; returns the refs removed.
 func (m *Manager) PruneSnapshots(ctx context.Context, maxAge time.Duration) ([]string, error) {
 	snaps, err := m.drv.ListSnapshots(ctx)

@@ -157,6 +157,17 @@ func New(mgr *sandbox.Manager) *mcp.Server {
 		return nil, histOut{Entries: entries}, nil
 	})
 
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "peapod_snapshot_diff",
+		Description: "Diff the files of two snapshots (what changed between them).",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in snapDiffIn) (*mcp.CallToolResult, sandbox.SnapshotDiff, error) {
+		diff, err := mgr.DiffSnapshots(ctx, in.A, in.B)
+		if err != nil {
+			return nil, sandbox.SnapshotDiff{}, err
+		}
+		return nil, diff, nil
+	})
+
 	return s
 }
 
@@ -288,6 +299,11 @@ type snapRefIn struct {
 
 type histOut struct {
 	Entries []sandbox.HistoryEntry `json:"entries"`
+}
+
+type snapDiffIn struct {
+	A string `json:"a" jsonschema:"first snapshot ref"`
+	B string `json:"b" jsonschema:"second snapshot ref"`
 }
 
 type forkIn struct {

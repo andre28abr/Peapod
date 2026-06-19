@@ -44,6 +44,7 @@ commands:
   snapshot ls
   snapshot rm <ref>
   snapshot prune [--max-age 24h]
+  snapshot diff <refA> <refB>
   preview up [--image IMG] [--net none|egress]    sandbox for the current git branch
   preview status
   preview down
@@ -244,6 +245,20 @@ func runSnapshot(ctx context.Context, args []string) {
 		for _, r := range removed {
 			fmt.Println("  -", r)
 		}
+	case "diff":
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: peapod snapshot diff <refA> <refB>")
+			os.Exit(2)
+		}
+		diff, err := mgr.DiffSnapshots(ctx, args[1], args[2])
+		check(err)
+		for _, f := range diff.Added {
+			fmt.Println("+ " + f)
+		}
+		for _, f := range diff.Removed {
+			fmt.Println("- " + f)
+		}
+		fmt.Printf("(%d added, %d removed)\n", len(diff.Added), len(diff.Removed))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown snapshot subcommand %q\n", args[0])
 		os.Exit(2)

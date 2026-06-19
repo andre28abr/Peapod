@@ -75,3 +75,8 @@ type Logger interface {
 type Statser interface {
 	Stats(ctx context.Context, ref string) (Stat, error)
 }
+
+// SnapshotDiffer is an optional capability: diff the files of two snapshots.
+type SnapshotDiffer interface {
+	DiffSnapshots(ctx context.Context, a, b string) (SnapshotDiff, error)
+}

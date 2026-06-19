@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -410,4 +411,47 @@ func (d *Driver) Stats(ctx context.Context, ref string) (sandbox.Stat, error) {
 		st.MemPerc = f[2]
 	}
 	return st, nil
+}
+
+// DiffSnapshots compares the file lists of two snapshot images.
+func (d *Driver) DiffSnapshots(ctx context.Context, a, b string) (sandbox.SnapshotDiff, error) {
+	listFiles := func(img string) (map[string]bool, error) {
+		out, errOut, code, err := d.run(ctx, nil, "run", "--rm", "--entrypoint", "sh",
+			"--network", "none", img, "-c", "find / -xdev -type f 2>/dev/null | sort")
+		if err != nil {
+			return nil, err
+		}
+		if code != 0 {
+			return nil, fmt.Errorf("list %s: %s", img, strings.TrimSpace(errOut))
+		}
+		set := map[string]bool{}
+		for _, l := range strings.Split(out, "\n") {
+			if l = strings.TrimSpace(l); l != "" {
+				set[l] = true
+			}
+		}
+		return set, nil
+	}
+	fa, err := listFiles(a)
+	if err != nil {
+		return sandbox.SnapshotDiff{}, err
+	}
+	fb, err := listFiles(b)
+	if err != nil {
+		return sandbox.SnapshotDiff{}, err
+	}
+	var diff sandbox.SnapshotDiff
+	for f := range fb {
+		if !fa[f] {
+			diff.Added = append(diff.Added, f)
+		}
+	}
+	for f := range fa {
+		if !fb[f] {
+			diff.Removed = append(diff.Removed, f)
+		}
+	}
+	sort.Strings(diff.Added)
+	sort.Strings(diff.Removed)
+	return diff, nil
 }
