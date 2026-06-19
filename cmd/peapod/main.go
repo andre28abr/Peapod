@@ -52,6 +52,7 @@ commands:
   up [-f peapod.json]                 start a multi-service group
   down [-f peapod.json]               stop the group
   ps [-f peapod.json]                 list the group
+  templates [--json]                  list quick-start images
   version
 
 backend also via env PEAPOD_BACKEND (default: oci)
@@ -87,6 +88,8 @@ func main() {
 		runDown(ctx, args[1:])
 	case "ps":
 		runPs(ctx, args[1:])
+	case "templates":
+		runTemplates(args[1:])
 	case "version":
 		fmt.Println("peapod 0.1.0")
 	case "-h", "--help", "help":
@@ -177,6 +180,35 @@ func runPauseIdle(ctx context.Context, args []string) {
 	for _, id := range ids {
 		fmt.Println("  -", id)
 	}
+}
+
+var templates = []struct {
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	Desc  string `json:"desc"`
+}{
+	{"python", "python:3.12-slim", "Python 3.12"},
+	{"node", "node:22-slim", "Node.js 22"},
+	{"go", "golang:1.23", "Go toolchain"},
+	{"postgres", "postgres:16", "PostgreSQL 16"},
+	{"ubuntu", "ubuntu:24.04", "Ubuntu 24.04"},
+	{"alpine", "alpine", "Alpine (tiny)"},
+}
+
+func runTemplates(args []string) {
+	fs := flag.NewFlagSet("templates", flag.ExitOnError)
+	asJSON := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if *asJSON {
+		_ = json.NewEncoder(os.Stdout).Encode(templates)
+		return
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAME\tIMAGE\tDESCRIPTION")
+	for _, t := range templates {
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", t.Name, t.Image, t.Desc)
+	}
+	_ = tw.Flush()
 }
 
 func runSnapshot(ctx context.Context, args []string) {

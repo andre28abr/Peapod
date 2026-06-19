@@ -25,6 +25,12 @@ struct HistoryEntry: Codable {
     let preview: String?
 }
 
+struct Template: Codable {
+    let name: String
+    let image: String
+    let desc: String
+}
+
 func peapodBin() -> String {
     if let res = Bundle.main.resourceURL?.appendingPathComponent("peapod").path,
        FileManager.default.isExecutableFile(atPath: res) {
@@ -114,6 +120,12 @@ final class Model: ObservableObject {
         guard r.ok, let d = r.out.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([HistoryEntry].self, from: d)) ?? []
     }
+
+    func templates() -> [Template] {
+        let r = runPeapod(["templates", "--json"])
+        guard r.ok, let d = r.out.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([Template].self, from: d)) ?? []
+    }
 }
 
 struct DetailView: View {
@@ -198,6 +210,7 @@ struct ContentView: View {
     @StateObject private var model = Model()
     @State private var image = "alpine"
     @State private var selected: Sandbox?
+    @State private var templates: [Template] = []
     private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -210,6 +223,14 @@ struct ContentView: View {
                     .frame(width: 160)
                     .onSubmit { model.create(image) }
                 Button(action: { model.create(image) }) { Label("New", systemImage: "plus") }
+                Menu {
+                    ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
+                        Button("\(t.name) — \(t.image)") { model.create(t.image) }
+                    }
+                } label: {
+                    Label("Templates", systemImage: "square.grid.2x2")
+                }
+                .frame(width: 130)
                 Button(action: { model.refresh() }) { Image(systemName: "arrow.clockwise") }
             }
             Text(model.status).font(.caption).foregroundColor(.secondary)
@@ -250,7 +271,7 @@ struct ContentView: View {
         }
         .padding(16)
         .frame(minWidth: 620, minHeight: 440)
-        .onAppear { model.refresh() }
+        .onAppear { model.refresh(); templates = model.templates() }
         .onReceive(timer) { _ in model.refresh() }
         .sheet(item: $selected) { b in DetailView(model: model, box: b) }
     }
