@@ -23,6 +23,8 @@ swiftc -parse-as-library -O -o "$APP/Contents/MacOS/Peapod" Peapod.swift
 mv peapod-bin "$APP/Contents/Resources/peapod"
 chmod +x "$APP/Contents/Resources/peapod"
 cp Peapod.icns "$APP/Contents/Resources/Peapod.icns"
+mkdir -p "$APP/Contents/Resources/pt-BR.lproj"
+printf '/* Peapod — pt-BR */\n' > "$APP/Contents/Resources/pt-BR.lproj/Localizable.strings"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -32,6 +34,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDisplayName</key><string>Peapod</string>
   <key>CFBundleIdentifier</key><string>dev.peapod.ui</string>
   <key>CFBundleExecutable</key><string>Peapod</string>
+  <key>CFBundleDevelopmentRegion</key><string>pt-BR</string>
+  <key>CFBundleLocalizations</key><array><string>pt-BR</string></array>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>

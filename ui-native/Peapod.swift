@@ -85,7 +85,7 @@ func execCmd(_ id: String, _ command: String) -> String {
 @MainActor
 final class Model: ObservableObject {
     @Published var boxes: [Sandbox] = []
-    @Published var status: String = "loading…"
+    @Published var status: String = "carregando…"
 
     func refresh() {
         let r = runPeapod(["sandbox", "ls", "--json"])
@@ -93,11 +93,11 @@ final class Model: ObservableObject {
               let list = try? JSONDecoder().decode([Sandbox].self, from: data) else {
             boxes = []
             let e = r.err.trimmingCharacters(in: .whitespacesAndNewlines)
-            status = e.isEmpty ? "can't reach peapod — is OrbStack/Docker running?" : e
+            status = e.isEmpty ? "sem conexão com o peapod — o OrbStack/Docker está rodando?" : e
             return
         }
         boxes = list
-        status = list.isEmpty ? "no sandboxes yet" : "\(list.count) sandbox(es)"
+        status = list.isEmpty ? "nenhum sandbox ainda" : "\(list.count) sandbox(es)"
     }
 
     func create(_ image: String) {
@@ -113,13 +113,13 @@ final class Model: ObservableObject {
         let name = "\(id)-\(Int(Date().timeIntervalSince1970))"
         let r = runPeapod(["sandbox", "snapshot", id, name])
         status = r.ok ? "snapshot: " + r.out.trimmingCharacters(in: .whitespacesAndNewlines)
-                      : "snapshot failed"
+                      : "falha no snapshot"
     }
 
     func logs(_ id: String) -> String {
         let r = runPeapod(["sandbox", "logs", id, "--tail", "200"])
         let t = (r.out + r.err).trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? "(no output yet)" : t
+        return t.isEmpty ? "(sem saída ainda)" : t
     }
 
     func stats(_ id: String) -> Stat? {
@@ -165,7 +165,7 @@ struct DetailView: View {
     let model: Model
     let box: Sandbox
     @Environment(\.dismiss) private var dismiss
-    @State private var logs = "loading…"
+    @State private var logs = "carregando…"
     @State private var stat: Stat?
     @State private var history: [HistoryEntry] = []
     @State private var cpuHist: [Double] = []
@@ -181,8 +181,8 @@ struct DetailView: View {
             HStack {
                 Text(box.id).font(.system(.title3, design: .monospaced))
                 Spacer()
-                Button("Refresh") { load() }
-                Button("Close") { dismiss() }
+                Button("Atualizar") { load() }
+                Button("Fechar") { dismiss() }
             }
             Text("\(box.image) · \(box.network)").font(.caption).foregroundColor(.secondary)
             if let s = stat {
@@ -198,22 +198,22 @@ struct DetailView: View {
                 }
             }
             Picker("", selection: $tab) {
-                Text("History").tag(1)
+                Text("Histórico").tag(1)
                 Text("Logs").tag(0)
-                Text("Run").tag(2)
+                Text("Executar").tag(2)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
 
             if tab == 2 {
                 HStack {
-                    TextField("command, e.g. ls -la /work", text: $cmd)
+                    TextField("comando, ex.: ls -la /work", text: $cmd)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { runCmd() }
-                    Button("Run") { runCmd() }.disabled(running)
+                    Button("Executar") { runCmd() }.disabled(running)
                 }
                 ScrollView {
-                    Text(cmdOut.isEmpty ? "Run a command inside the sandbox." : cmdOut)
+                    Text(cmdOut.isEmpty ? "Execute um comando dentro do sandbox." : cmdOut)
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                         .foregroundColor(cmdOut.isEmpty ? .secondary : .primary)
@@ -234,7 +234,7 @@ struct DetailView: View {
                     } else {
                         VStack(alignment: .leading, spacing: 6) {
                             if history.isEmpty {
-                                Text("No commands recorded yet.").font(.caption).foregroundColor(.secondary)
+                                Text("Nenhum comando registrado ainda.").font(.caption).foregroundColor(.secondary)
                             }
                             ForEach(Array(history.enumerated()), id: \.offset) { _, e in
                                 VStack(alignment: .leading, spacing: 1) {
@@ -298,7 +298,7 @@ struct DetailView: View {
             let out = execCmd(id, c)
             DispatchQueue.main.async {
                 cmdOut = out.trimmingCharacters(in: .whitespacesAndNewlines)
-                if cmdOut.isEmpty { cmdOut = "(no output)" }
+                if cmdOut.isEmpty { cmdOut = "(sem saída)" }
                 running = false
                 history = model.history(id)
             }
@@ -318,17 +318,17 @@ struct ContentView: View {
             HStack {
                 Text("Peapod").font(.title2).bold()
                 Spacer()
-                TextField("image", text: $image)
+                TextField("imagem", text: $image)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 160)
                     .onSubmit { model.create(image) }
-                Button(action: { model.create(image) }) { Label("New", systemImage: "plus") }
+                Button(action: { model.create(image) }) { Label("Novo", systemImage: "plus") }
                 Menu {
                     ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
                         Button("\(t.name) — \(t.image)") { model.create(t.image) }
                     }
                 } label: {
-                    Label("Templates", systemImage: "square.grid.2x2")
+                    Label("Modelos", systemImage: "square.grid.2x2")
                 }
                 .frame(width: 130)
                 Button(action: { model.refresh() }) { Image(systemName: "arrow.clockwise") }
@@ -337,7 +337,7 @@ struct ContentView: View {
 
             if model.boxes.isEmpty {
                 Spacer()
-                Text("No sandboxes.\nType an image and click New.")
+                Text("Nenhum sandbox.\nDigite uma imagem e clique em Novo.")
                     .multilineTextAlignment(.center)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -350,15 +350,15 @@ struct ContentView: View {
                             Text("\(b.image) · \(b.network)").font(.caption).foregroundColor(.secondary)
                         }
                         if b.paused == true {
-                            Text("paused").font(.caption).foregroundColor(.orange)
+                            Text("pausado").font(.caption).foregroundColor(.orange)
                         }
                         Spacer()
                         Button("Logs") { selected = b }
                         Button("Snapshot") { model.snapshot(b.id) }
                         if b.paused == true {
-                            Button("Resume") { model.resume(b.id) }
+                            Button("Retomar") { model.resume(b.id) }
                         } else {
-                            Button("Pause") { model.pause(b.id) }
+                            Button("Pausar") { model.pause(b.id) }
                         }
                         Button(role: .destructive) { model.destroy(b.id) } label: {
                             Image(systemName: "trash")
@@ -379,6 +379,11 @@ struct ContentView: View {
 
 @main
 struct PeapodApp: App {
+    init() {
+        // Força a interface e os menus padrão do macOS em português (pt-BR),
+        // independentemente do idioma do sistema.
+        UserDefaults.standard.set(["pt-BR"], forKey: "AppleLanguages")
+    }
     var body: some Scene {
         WindowGroup("Peapod") {
             ContentView()
