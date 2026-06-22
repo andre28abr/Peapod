@@ -326,9 +326,64 @@ struct DetailView: View {
     }
 }
 
+struct CreatePanel: View {
+    let model: Model
+    let templates: [Template]
+    var onPicked: () -> Void = {}
+    @State private var customImage = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Comece com um modelo").font(.headline)
+            Text("Clique em um modelo para criar um sandbox isolado.")
+                .font(.caption).foregroundColor(.secondary)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                    ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
+                        let parts = t.desc.components(separatedBy: " — ")
+                        Button {
+                            model.create(t.image); onPicked()
+                        } label: {
+                            VStack(spacing: 2) {
+                                Text(parts.first ?? t.name).bold()
+                                if parts.count > 1 {
+                                    Text(parts[1]).font(.caption2)
+                                        .foregroundColor(.secondary).lineLimit(1)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(model.busy)
+                    }
+                }
+                .padding(.top, 2)
+            }
+            Divider()
+            HStack {
+                TextField("ou uma imagem personalizada, ex.: python:3.12-bookworm", text: $customImage)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { createCustom() }
+                Button("Criar") { createCustom() }
+                    .disabled(model.busy || customImage.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func createCustom() {
+        let img = customImage.trimmingCharacters(in: .whitespaces)
+        guard !img.isEmpty else { return }
+        model.create(img)
+        customImage = ""
+        onPicked()
+    }
+}
+
 struct ContentView: View {
     @StateObject private var model = Model()
-    @State private var image = "alpine"
+    @State private var showCreate = false
     @State private var selected: Sandbox?
     @State private var templates: [Template] = []
     private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
@@ -338,22 +393,11 @@ struct ContentView: View {
             HStack {
                 Text("Peapod").font(.title2).bold()
                 Spacer()
-                TextField("imagem", text: $image)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 160)
-                    .onSubmit { model.create(image) }
                 if model.busy { ProgressView().controlSize(.small) }
-                Button(action: { model.create(image) }) { Label("Novo", systemImage: "plus") }
-                    .disabled(model.busy)
-                Menu {
-                    ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
-                        Button(t.desc) { model.create(t.image) }
-                    }
-                } label: {
-                    Label("Modelos", systemImage: "square.grid.2x2")
+                if !model.engineDown && !model.boxes.isEmpty {
+                    Button(action: { showCreate = true }) { Label("Novo", systemImage: "plus") }
+                        .disabled(model.busy)
                 }
-                .frame(width: 130)
-                .disabled(model.busy)
                 Button(action: { model.refresh() }) { Image(systemName: "arrow.clockwise") }
                     .disabled(model.busy)
             }
@@ -376,37 +420,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             } else if model.boxes.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Comece com um modelo").font(.headline)
-                    Text("Clique para criar um sandbox isolado — ou digite uma imagem e clique em Novo.")
-                        .font(.caption).foregroundColor(.secondary)
-                    ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
-                            ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
-                                let parts = t.desc.components(separatedBy: " — ")
-                                Button { model.create(t.image) } label: {
-                                    VStack(spacing: 2) {
-                                        Text(parts.first ?? t.name).bold()
-                                        if parts.count > 1 {
-                                            Text(parts[1]).font(.caption2)
-                                                .foregroundColor(.secondary).lineLimit(1)
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(model.busy)
-                            }
-                        }
-                        .padding(.top, 4)
-                    }
-                    if templates.isEmpty {
-                        Text("Nenhum sandbox. Digite uma imagem e clique em Novo.")
-                            .font(.caption).foregroundColor(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                CreatePanel(model: model, templates: templates)
             } else {
                 List(model.boxes) { b in
                     HStack(spacing: 8) {
@@ -439,6 +453,18 @@ struct ContentView: View {
         .onAppear { model.refresh(); templates = model.templates() }
         .onReceive(timer) { _ in if !model.busy { model.refresh() } }
         .sheet(item: $selected) { b in DetailView(model: model, box: b) }
+        .sheet(isPresented: $showCreate) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Novo sandbox").font(.headline)
+                    Spacer()
+                    Button("Fechar") { showCreate = false }
+                }
+                CreatePanel(model: model, templates: templates) { showCreate = false }
+            }
+            .padding(16)
+            .frame(width: 520, height: 460)
+        }
     }
 }
 
