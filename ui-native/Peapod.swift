@@ -86,18 +86,28 @@ func execCmd(_ id: String, _ command: String) -> String {
 final class Model: ObservableObject {
     @Published var boxes: [Sandbox] = []
     @Published var status: String = "carregando…"
+    @Published var engineDown = false
 
     func refresh() {
         let r = runPeapod(["sandbox", "ls", "--json"])
         guard r.ok, let data = r.out.data(using: .utf8),
               let list = try? JSONDecoder().decode([Sandbox].self, from: data) else {
             boxes = []
-            let e = r.err.trimmingCharacters(in: .whitespacesAndNewlines)
-            status = e.isEmpty ? "sem conexão com o peapod — o OrbStack/Docker está rodando?" : e
+            engineDown = true
+            status = "o OrbStack não está rodando"
             return
         }
+        engineDown = false
         boxes = list
         status = list.isEmpty ? "nenhum sandbox ainda" : "\(list.count) sandbox(es)"
+    }
+
+    func openEngine() {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = ["-a", "OrbStack"]
+        try? p.run()
+        status = "iniciando o OrbStack…"
     }
 
     func create(_ image: String) {
@@ -335,7 +345,23 @@ struct ContentView: View {
             }
             Text(model.status).font(.caption).foregroundColor(.secondary)
 
-            if model.boxes.isEmpty {
+            if model.engineDown {
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "bolt.horizontal.circle")
+                        .font(.system(size: 42)).foregroundColor(.orange)
+                    Text("O OrbStack não está rodando").font(.headline)
+                    Text("O Peapod precisa do OrbStack (ou Docker) para criar sandboxes.")
+                        .foregroundColor(.secondary).multilineTextAlignment(.center)
+                    HStack {
+                        Button("Abrir OrbStack") { model.openEngine() }
+                            .buttonStyle(.borderedProminent)
+                        Button("Tentar de novo") { model.refresh() }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                Spacer()
+            } else if model.boxes.isEmpty {
                 Spacer()
                 Text("Nenhum sandbox.\nDigite uma imagem e clique em Novo.")
                     .multilineTextAlignment(.center)

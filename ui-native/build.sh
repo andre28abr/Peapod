@@ -44,6 +44,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 
+# Bump CFBundleVersion every build so macOS re-renders the icon (avoids stale cache).
+BUILDV="$(date +%Y%m%d%H%M%S)"
+/usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILDV" "$APP/Contents/Info.plist" 2>/dev/null \
+  || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILDV" "$APP/Contents/Info.plist"
+
 echo "==> signing (ad-hoc)"
 codesign --force --deep --sign - "$APP" 2>/dev/null || echo "   (codesign skipped)"
 
