@@ -192,12 +192,16 @@ var templates = []struct {
 	Image string `json:"image"`
 	Desc  string `json:"desc"`
 }{
-	{"python", "python:3.12-slim", "Python 3.12"},
-	{"node", "node:22-slim", "Node.js 22"},
-	{"go", "golang:1.23", "Go toolchain"},
-	{"postgres", "postgres:16", "PostgreSQL 16"},
-	{"ubuntu", "ubuntu:24.04", "Ubuntu 24.04"},
-	{"alpine", "alpine", "Alpine (tiny)"},
+	{"python", "python:3.12-slim", "Python 3.12 — scripts e automações"},
+	{"node", "node:22-slim", "Node.js 22 — JavaScript/TypeScript"},
+	{"go", "golang:1.23", "Go — compilador e ferramentas"},
+	{"rust", "rust:1", "Rust — compilador e Cargo"},
+	{"ruby", "ruby:3.3", "Ruby 3.3 — scripts e gems"},
+	{"postgres", "postgres:16", "PostgreSQL 16 — banco de dados"},
+	{"redis", "redis:7", "Redis 7 — cache chave-valor"},
+	{"debian", "debian:12-slim", "Debian 12 — base geral"},
+	{"ubuntu", "ubuntu:24.04", "Ubuntu 24.04 — base geral"},
+	{"alpine", "alpine", "Alpine — base mínima"},
 }
 
 func runProxy(args []string) {

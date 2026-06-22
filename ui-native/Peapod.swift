@@ -347,7 +347,7 @@ struct ContentView: View {
                     .disabled(model.busy)
                 Menu {
                     ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
-                        Button("\(t.name) — \(t.image)") { model.create(t.image) }
+                        Button(t.desc) { model.create(t.image) }
                     }
                 } label: {
                     Label("Modelos", systemImage: "square.grid.2x2")
