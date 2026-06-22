@@ -87,6 +87,7 @@ final class Model: ObservableObject {
     @Published var boxes: [Sandbox] = []
     @Published var status: String = "carregando…"
     @Published var engineDown = false
+    @Published var busy = false
 
     func refresh() {
         let r = runPeapod(["sandbox", "ls", "--json"])
@@ -111,9 +112,18 @@ final class Model: ObservableObject {
     }
 
     func create(_ image: String) {
+        if busy { return }
         let img = image.trimmingCharacters(in: .whitespaces)
-        _ = runPeapod(["sandbox", "create", img.isEmpty ? "alpine" : img])
-        refresh()
+        let target = img.isEmpty ? "alpine" : img
+        busy = true
+        status = "criando sandbox (\(target))… baixando a imagem na primeira vez"
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = runPeapod(["sandbox", "create", target])
+            DispatchQueue.main.async {
+                self.busy = false
+                self.refresh()
+            }
+        }
     }
     func destroy(_ id: String) { _ = runPeapod(["sandbox", "rm", id]); refresh() }
     func pause(_ id: String) { _ = runPeapod(["sandbox", "pause", id]); refresh() }
@@ -332,7 +342,9 @@ struct ContentView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 160)
                     .onSubmit { model.create(image) }
+                if model.busy { ProgressView().controlSize(.small) }
                 Button(action: { model.create(image) }) { Label("Novo", systemImage: "plus") }
+                    .disabled(model.busy)
                 Menu {
                     ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
                         Button("\(t.name) — \(t.image)") { model.create(t.image) }
@@ -341,7 +353,9 @@ struct ContentView: View {
                     Label("Modelos", systemImage: "square.grid.2x2")
                 }
                 .frame(width: 130)
+                .disabled(model.busy)
                 Button(action: { model.refresh() }) { Image(systemName: "arrow.clockwise") }
+                    .disabled(model.busy)
             }
             Text(model.status).font(.caption).foregroundColor(.secondary)
 
@@ -398,7 +412,7 @@ struct ContentView: View {
         .padding(16)
         .frame(minWidth: 620, minHeight: 440)
         .onAppear { model.refresh(); templates = model.templates() }
-        .onReceive(timer) { _ in model.refresh() }
+        .onReceive(timer) { _ in if !model.busy { model.refresh() } }
         .sheet(item: $selected) { b in DetailView(model: model, box: b) }
     }
 }
