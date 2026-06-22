@@ -376,12 +376,37 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             } else if model.boxes.isEmpty {
-                Spacer()
-                Text("Nenhum sandbox.\nDigite uma imagem e clique em Novo.")
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Comece com um modelo").font(.headline)
+                    Text("Clique para criar um sandbox isolado — ou digite uma imagem e clique em Novo.")
+                        .font(.caption).foregroundColor(.secondary)
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
+                            ForEach(Array(templates.enumerated()), id: \.offset) { _, t in
+                                let parts = t.desc.components(separatedBy: " — ")
+                                Button { model.create(t.image) } label: {
+                                    VStack(spacing: 2) {
+                                        Text(parts.first ?? t.name).bold()
+                                        if parts.count > 1 {
+                                            Text(parts[1]).font(.caption2)
+                                                .foregroundColor(.secondary).lineLimit(1)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(model.busy)
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                    if templates.isEmpty {
+                        Text("Nenhum sandbox. Digite uma imagem e clique em Novo.")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 List(model.boxes) { b in
                     HStack(spacing: 8) {
