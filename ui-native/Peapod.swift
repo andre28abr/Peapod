@@ -391,7 +391,7 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Peapod").font(.title2).bold()
+                Text(model.status).font(.callout).foregroundColor(.secondary)
                 Spacer()
                 if model.busy { ProgressView().controlSize(.small) }
                 if !model.engineDown && !model.boxes.isEmpty {
@@ -401,7 +401,6 @@ struct ContentView: View {
                 Button(action: { model.refresh() }) { Image(systemName: "arrow.clockwise") }
                     .disabled(model.busy)
             }
-            Text(model.status).font(.caption).foregroundColor(.secondary)
 
             if model.engineDown {
                 Spacer()
@@ -474,6 +473,8 @@ struct PeapodApp: App {
         // Força a interface e os menus padrão do macOS em português (pt-BR),
         // independentemente do idioma do sistema.
         UserDefaults.standard.set(["pt-BR"], forKey: "AppleLanguages")
+        // App utilitário de janela única — remove o "+" de novas abas no título.
+        NSWindow.allowsAutomaticWindowTabbing = false
     }
     var body: some Scene {
         WindowGroup("Peapod") {
