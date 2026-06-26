@@ -269,8 +269,12 @@ func (m *Manager) Stats(ctx context.Context, id string) (Stat, error) {
 }
 
 func (m *Manager) histPath(id string) string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".peapod", "history", id+".jsonl")
+	base := os.Getenv("PEAPOD_HISTORY_DIR")
+	if base == "" {
+		home, _ := os.UserHomeDir()
+		base = filepath.Join(home, ".peapod", "history")
+	}
+	return filepath.Join(base, id+".jsonl")
 }
 
 // record appends an audit entry for a command run in the sandbox.
