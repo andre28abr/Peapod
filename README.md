@@ -14,6 +14,7 @@
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-12%20ferramentas-7C3AED)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-orange)
+[![Baixar](https://img.shields.io/badge/baixar-Peapod.dmg-1D9E75?logo=apple&logoColor=white)](https://github.com/andre28abr/Peapod/releases/latest)
 
 ![Demo do Peapod](docs/demo.svg)
 
@@ -89,7 +90,15 @@ A diferença para o Docker cru não é *rodar contêiner* — é o **contexto de
 
 Não é para rodar serviços de produção nem substituir o Docker Desktop em apps de longa duração. É para execução **efêmera, isolada e não-confiável** — o "laboratório selado", não o servidor.
 
-## 🚀 Começando
+## ⬇️ Instalar (macOS)
+
+**[⬇️ Baixar a última versão — Peapod.dmg](https://github.com/andre28abr/Peapod/releases/latest)** · abra o `.dmg` e arraste o **Peapod** para *Aplicativos*.
+
+> Na primeira vez, como o app é assinado *ad-hoc* (não notarizado pela Apple), o macOS exibe um aviso de segurança. Clique com o **botão direito em Peapod → Abrir → Abrir** — depois disso, abre com duplo-clique normalmente.
+>
+> Requer **OrbStack** (ou Docker) rodando.
+
+## 🚀 Começando (a partir do código)
 
 ```sh
 # CLI
