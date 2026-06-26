@@ -98,6 +98,14 @@ Não é para rodar serviços de produção nem substituir o Docker Desktop em ap
 >
 > Requer **OrbStack** (ou Docker) rodando.
 
+**CLI + servidor MCP via Homebrew:**
+
+```sh
+brew tap andre28abr/peapod
+brew trust andre28abr/peapod   # Homebrew 6+: confiar no tap (uma vez)
+brew install peapod
+```
+
 ## 🚀 Começando (a partir do código)
 
 ```sh
@@ -170,7 +178,7 @@ go test ./...     # usa o driver mock em memória — não precisa de daemon
 go vet ./...
 ```
 
-CI (GitHub Actions) roda vet/test/build a cada push. Fórmula Homebrew em `Formula/peapod.rb`.
+CI (GitHub Actions) roda vet/test/build a cada push. Tap Homebrew: [andre28abr/homebrew-peapod](https://github.com/andre28abr/homebrew-peapod) (fórmula também versionada em `Formula/peapod.rb`).
 
 ## 📄 Licença
 
