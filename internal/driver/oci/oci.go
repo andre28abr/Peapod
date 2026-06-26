@@ -166,13 +166,21 @@ func fileExists(p string) bool {
 // proxy inside the firewall sidecar (a Linux container). It is required for the
 // bypass-proof --allow firewall; we fail closed if it's missing.
 func peapodLinuxBin() (string, error) {
+	// Resolve symlinks: `docker cp` of a symlink lands a dangling link in the
+	// container (e.g. Homebrew's bin/peapod-linux-* points into the Cellar).
+	resolve := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return p
+	}
 	if p := os.Getenv("PEAPOD_LINUX_BIN"); p != "" && fileExists(p) {
-		return p, nil
+		return resolve(p), nil
 	}
 	if exe, err := os.Executable(); err == nil {
-		cand := filepath.Join(filepath.Dir(exe), "peapod-linux-"+runtime.GOARCH)
+		cand := filepath.Join(filepath.Dir(resolve(exe)), "peapod-linux-"+runtime.GOARCH)
 		if fileExists(cand) {
-			return cand, nil
+			return resolve(cand), nil
 		}
 	}
 	return "", fmt.Errorf("--allow firewall needs the linux proxy binary: set PEAPOD_LINUX_BIN "+
