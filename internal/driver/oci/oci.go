@@ -231,6 +231,10 @@ func (d *Driver) setupFirewall(ctx context.Context, id string, allow []string) (
 	if err := step("copy proxy", "cp", lbin, sc+":/peapod"); err != nil {
 		return fail("%v", err)
 	}
+	// docker cp doesn't reliably preserve the executable bit across runtimes.
+	if err := step("mark proxy executable", "exec", sc, "chmod", "+x", "/peapod"); err != nil {
+		return fail("%v", err)
+	}
 	if err := step("start proxy", "exec", "-d", sc, "/peapod", "proxy", "--allow", strings.Join(allow, ","), "--addr", ":8899"); err != nil {
 		return fail("%v", err)
 	}
