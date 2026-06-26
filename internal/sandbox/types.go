@@ -48,6 +48,10 @@ type Spec struct {
 	Resources Resources         `json:"resources,omitempty"`
 	Mounts    []Mount           `json:"mounts,omitempty"`
 	Ports     []Port            `json:"ports,omitempty"`
+	// Allow is an egress domain allowlist. When set, the driver builds a
+	// bypass-proof firewall (internal network + proxy sidecar) instead of just
+	// trusting HTTP(S)_PROXY env vars.
+	Allow []string `json:"allow,omitempty"`
 	// Labels carries internal metadata (e.g. peapod.id). The Manager fills it in.
 	Labels map[string]string `json:"-"`
 }

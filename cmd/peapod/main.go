@@ -394,12 +394,9 @@ func runSandbox(ctx context.Context, args []string) {
 		check(err)
 		spec := sandbox.Spec{Image: fs.Arg(0), Name: *name, Network: sandbox.NetworkPolicy(*net), Ports: ports}
 		if doms := splitComma(*allow); len(doms) > 0 {
-			spec.Network = sandbox.NetworkEgress
-			spec.Env = map[string]string{}
-			for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
-				spec.Env[k] = "http://host.docker.internal:8899"
-			}
-			fmt.Fprintf(os.Stderr, "note: run `peapod proxy --allow %s` so this sandbox can reach those domains.\n", *allow)
+			// The driver builds a bypass-proof firewall: an internal network the
+			// sandbox can't escape + a proxy sidecar enforcing this allowlist.
+			spec.Allow = doms
 		}
 		sb, err := mgr.Create(ctx, spec)
 		check(err)

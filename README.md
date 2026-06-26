@@ -80,7 +80,7 @@ Pense no Peapod como **`docker run --rm` com três superpoderes**:
 
 | Superpoder | O que isso te dá |
 |---|---|
-| 🔒 **Seguro por padrão** | sem rede e com limites de CPU/mem/PID; quando o código precisa de internet (ex.: `pip install`), você libera **só** os domínios necessários com `--allow pypi.org` |
+| 🔒 **Seguro por padrão** | sem rede e com limites de CPU/mem/PID; quando o código precisa de internet (ex.: `pip install`), você libera **só** os domínios necessários com `--allow pypi.org` — firewall **à prova de bypass** (rede interna + proxy sidecar) |
 | 🧾 **Com memória** | trilha de auditoria de todos os comandos que rodaram no sandbox |
 | 🤖 **Dirigível por IA** | exposto via MCP, o agente cria, roda e descarta sozinho |
 
@@ -148,7 +148,7 @@ Capacidades opcionais (checkpoint, logs, stats, diff de snapshot) são detectada
 - **Sandboxes**: create / exec / arquivos / ls / destroy, com limites de CPU/mem/PID e timeout de exec.
 - **Servidor MCP** (12 ferramentas) para agentes dirigirem tudo.
 - **Trilha de auditoria**: cada comando registrado (`sandbox history`).
-- **Firewall por domínio**: proxy de allowlist de egresso (`peapod proxy --allow …`).
+- **Firewall por domínio à prova de bypass**: `--allow d1,d2` coloca o sandbox numa rede interna (sem rota pra fora) com um **proxy sidecar** como única saída — até um processo que ignore `HTTP(S)_PROXY` fica sem rota.
 - **Snapshots**: snapshot / fork / ls / prune / **diff**.
 - **Ciclo de vida**: pause / resume, **auto-pause** de ocioso, reap por idade.
 - **Templates**: imagens de 1 clique (Python, Node, Go, Postgres…).

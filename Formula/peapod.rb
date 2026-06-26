@@ -17,6 +17,11 @@ class Peapod < Formula
 
   def install
     system "go", "build", "-o", bin/"peapod", "./cmd/peapod"
+    # Static linux binary that runs the egress proxy inside the firewall sidecar
+    # (used by the bypass-proof --allow firewall).
+    arch = Hardware::CPU.arm? ? "arm64" : "amd64"
+    system "env", "GOOS=linux", "GOARCH=#{arch}", "CGO_ENABLED=0",
+           "go", "build", "-o", bin/"peapod-linux-#{arch}", "./cmd/peapod"
   end
 
   test do

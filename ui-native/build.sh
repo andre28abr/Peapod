@@ -9,6 +9,10 @@ APP="Peapod.app"
 echo "==> building peapod CLI (Go)"
 ( cd "$ROOT" && go build -o ui-native/peapod-bin ./cmd/peapod )
 
+echo "==> cross-compiling linux proxy binary (bypass-proof firewall sidecar)"
+case "$(uname -m)" in arm64|aarch64) LGOARCH=arm64;; *) LGOARCH=amd64;; esac
+( cd "$ROOT" && GOOS=linux GOARCH=$LGOARCH CGO_ENABLED=0 go build -o "ui-native/peapod-linux-$LGOARCH" ./cmd/peapod )
+
 echo "==> generating icon"
 swiftc -O -o /tmp/peapod-iconmaker Icon.swift
 rm -rf Peapod.iconset
@@ -22,6 +26,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -parse-as-library -O -o "$APP/Contents/MacOS/Peapod" Peapod.swift
 mv peapod-bin "$APP/Contents/Resources/peapod"
 chmod +x "$APP/Contents/Resources/peapod"
+mv "peapod-linux-$LGOARCH" "$APP/Contents/Resources/peapod-linux-$LGOARCH"
+chmod +x "$APP/Contents/Resources/peapod-linux-$LGOARCH"
 cp Peapod.icns "$APP/Contents/Resources/Peapod.icns"
 mkdir -p "$APP/Contents/Resources/pt-BR.lproj"
 printf '/* Peapod — pt-BR */\n' > "$APP/Contents/Resources/pt-BR.lproj/Localizable.strings"

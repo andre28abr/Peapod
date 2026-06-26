@@ -11,8 +11,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,12 +71,22 @@ func (d *Driver) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Sandbox
 	if id == "" {
 		return sandbox.Sandbox{}, errors.New("missing peapod.id label (call via Manager)")
 	}
+	var fwNet string
+	if len(spec.Allow) > 0 {
+		n, err := d.setupFirewall(ctx, id, spec.Allow)
+		if err != nil {
+			return sandbox.Sandbox{}, err
+		}
+		fwNet = n
+	}
 	created := time.Now()
-	_, errOut, code, err := d.run(ctx, nil, createArgs(id, spec, created)...)
+	_, errOut, code, err := d.run(ctx, nil, createArgs(id, spec, created, fwNet)...)
 	if err != nil {
+		d.teardownFirewall(ctx, id)
 		return sandbox.Sandbox{}, err
 	}
 	if code != 0 {
+		d.teardownFirewall(ctx, id)
 		return sandbox.Sandbox{}, fmt.Errorf("create failed: %s", strings.TrimSpace(errOut))
 	}
 	return sandbox.Sandbox{
@@ -85,14 +98,18 @@ func (d *Driver) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Sandbox
 
 // createArgs builds the argv for `<runtime> run ...`. It performs no I/O so it
 // can be unit-tested without a container daemon.
-func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
+func createArgs(id string, spec sandbox.Spec, created time.Time, fwNet string) []string {
 	name := containerName(id)
+	netLabel := string(spec.Network)
+	if fwNet != "" {
+		netLabel = "allow" // firewalled egress via the proxy sidecar
+	}
 	args := []string{
 		"run", "-d", "--name", name,
 		"--label", "peapod.managed=true",
 		"--label", "peapod.id=" + id,
 		"--label", "peapod.image=" + spec.Image,
-		"--label", "peapod.network=" + string(spec.Network),
+		"--label", "peapod.network=" + netLabel,
 		"--label", "peapod.workdir=" + spec.Workdir,
 		"--label", "peapod.created=" + strconv.FormatInt(created.UnixNano(), 10),
 		"-w", spec.Workdir,
@@ -100,7 +117,15 @@ func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
 	if spec.Name != "" {
 		args = append(args, "--label", "peapod.name="+spec.Name)
 	}
-	if spec.Network == sandbox.NetworkNone {
+	switch {
+	case fwNet != "":
+		// Only route off the sandbox is the proxy sidecar; point tools at it.
+		args = append(args, "--network", fwNet)
+		proxyURL := "http://" + fwSidecarName(id) + ":8899"
+		for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+			args = append(args, "-e", k+"="+proxyURL)
+		}
+	case spec.Network == sandbox.NetworkNone:
 		args = append(args, "--network", "none")
 	}
 	if spec.Resources.CPUs > 0 {
@@ -127,6 +152,88 @@ func createArgs(id string, spec sandbox.Spec, created time.Time) []string {
 	}
 	args = append(args, spec.Image, "sleep", "infinity")
 	return args
+}
+
+func fwNetName(id string) string     { return "peapod-net-" + id }
+func fwSidecarName(id string) string { return "peapod-fw-" + id }
+
+func fileExists(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && !info.IsDir()
+}
+
+// peapodLinuxBin locates the static linux `peapod` binary used to run the egress
+// proxy inside the firewall sidecar (a Linux container). It is required for the
+// bypass-proof --allow firewall; we fail closed if it's missing.
+func peapodLinuxBin() (string, error) {
+	if p := os.Getenv("PEAPOD_LINUX_BIN"); p != "" && fileExists(p) {
+		return p, nil
+	}
+	if exe, err := os.Executable(); err == nil {
+		cand := filepath.Join(filepath.Dir(exe), "peapod-linux-"+runtime.GOARCH)
+		if fileExists(cand) {
+			return cand, nil
+		}
+	}
+	return "", fmt.Errorf("--allow firewall needs the linux proxy binary: set PEAPOD_LINUX_BIN "+
+		"or place peapod-linux-%s next to the peapod binary", runtime.GOARCH)
+}
+
+// setupFirewall builds the bypass-proof egress firewall for a sandbox:
+//   - an --internal Docker network the sandbox cannot route off of, and
+//   - a proxy sidecar (the only thing bridging internal↔egress) that enforces
+//     the domain allowlist.
+//
+// Because the sandbox's sole network is internal, even a process that ignores
+// HTTP(S)_PROXY has no route out — so the allowlist can't be bypassed. Returns
+// the internal network name to attach the sandbox to.
+func (d *Driver) setupFirewall(ctx context.Context, id string, allow []string) (string, error) {
+	lbin, err := peapodLinuxBin()
+	if err != nil {
+		return "", err
+	}
+	net, sc := fwNetName(id), fwSidecarName(id)
+	fail := func(format string, a ...any) (string, error) {
+		d.teardownFirewall(ctx, id)
+		return "", fmt.Errorf(format, a...)
+	}
+	step := func(what string, args ...string) error {
+		_, e, code, err := d.run(ctx, nil, args...)
+		if err != nil {
+			return err
+		}
+		if code != 0 {
+			return fmt.Errorf("%s: %s", what, strings.TrimSpace(e))
+		}
+		return nil
+	}
+	// 1) internal network — no route off it.
+	if err := step("create firewall network", "network", "create", "--internal", "--label", "peapod.fw="+id, net); err != nil {
+		return fail("%v", err)
+	}
+	// 2) sidecar on the egress (bridge) network, so its default route reaches out.
+	if err := step("start firewall sidecar", "run", "-d", "--name", sc, "--label", "peapod.fw="+id, "--network", "bridge", "alpine", "sleep", "infinity"); err != nil {
+		return fail("%v", err)
+	}
+	// 3) attach the sidecar to the internal network so the sandbox can reach it.
+	if err := step("attach sidecar", "network", "connect", net, sc); err != nil {
+		return fail("%v", err)
+	}
+	// 4) inject the proxy binary and start it on the internal interface.
+	if err := step("copy proxy", "cp", lbin, sc+":/peapod"); err != nil {
+		return fail("%v", err)
+	}
+	if err := step("start proxy", "exec", "-d", sc, "/peapod", "proxy", "--allow", strings.Join(allow, ","), "--addr", ":8899"); err != nil {
+		return fail("%v", err)
+	}
+	return net, nil
+}
+
+// teardownFirewall removes a sandbox's firewall sidecar and network (best effort;
+// no-op when the sandbox had no firewall).
+func (d *Driver) teardownFirewall(ctx context.Context, id string) {
+	_, _, _, _ = d.run(ctx, nil, "rm", "-f", fwSidecarName(id))
+	_, _, _, _ = d.run(ctx, nil, "network", "rm", fwNetName(id))
 }
 
 // Resolve reconstructs a sandbox from the container's labels (the backend is
@@ -251,6 +358,7 @@ func (d *Driver) Destroy(ctx context.Context, ref string) error {
 	if code != 0 {
 		return fmt.Errorf("destroy failed: %s", strings.TrimSpace(errOut))
 	}
+	d.teardownFirewall(ctx, strings.TrimPrefix(ref, "peapod-"))
 	return nil
 }
 

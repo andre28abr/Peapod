@@ -43,12 +43,16 @@ implementa só o que suporta): `Checkpointer` (checkpoint/restore), `Logger`
 
 - **Rede desligada por padrão** (`--net none`) — *minimização*. Alternativa:
   `egress` (saída liberada) ou allowlist por proxy.
-- **Allowlist de domínio** — `peapod proxy --allow d1,d2` sobe um proxy de egresso
-  (HTTP + HTTPS via CONNECT) que só encaminha para os domínios listados (e
-  subdomínios); o resto recebe 403. `sandbox create --allow ...` aponta o
-  `HTTP(S)_PROXY` do sandbox para ele. Escopo: vale para ferramentas que respeitam
-  `HTTP(S)_PROXY` (curl, pip, apt, npm…); isolamento à prova de bypass (rede
-  interna + sidecar) é um passo futuro.
+- **Allowlist de domínio (à prova de bypass)** — `sandbox create --allow d1,d2`
+  coloca o sandbox numa rede Docker `--internal` (sem rota para fora) e sobe um
+  **proxy sidecar** ligado à rede interna *e* à de egresso — a única ponte para
+  fora. O proxy (HTTP + HTTPS via CONNECT) só encaminha para os domínios listados
+  (e subdomínios); o resto recebe 403. Como a única rede do sandbox é a interna,
+  **mesmo um processo que ignore `HTTP(S)_PROXY` fica sem rota** — o allowlist não
+  é burlável. O proxy roda o binário linux do peapod (`peapod-linux-<arch>`,
+  embutido no app e instalado pela fórmula); sem ele, `--allow` **falha fechado**.
+  Tudo é criado e destruído junto com o sandbox; `peapod proxy` segue disponível
+  para uso avulso.
 - **Limites de recurso** por sandbox — defaults: **2 CPUs, 1024 MB de RAM, 512
   PIDs** (`--cpus`/`--memory`/`--pids-limit` no driver oci).
 - **Timeout de exec** — o caminho MCP aplica 120 s por padrão (`timeout_seconds`;
