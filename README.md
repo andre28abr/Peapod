@@ -16,7 +16,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0-orange)
 [![Baixar](https://img.shields.io/badge/baixar-Peapod.dmg-1D9E75?logo=apple&logoColor=white)](https://github.com/andre28abr/Peapod/releases/latest)
 
-![Demo do Peapod](docs/demo.svg)
+![Demo do Peapod](docs/demo.gif)
 
 ---
 
