@@ -467,6 +467,116 @@ struct ContentView: View {
     }
 }
 
+// --- Renderizador de Markdown mínimo (cabeçalhos, listas, código, citações) ---
+
+enum MDBlock {
+    case heading(Int, String)
+    case paragraph(String)
+    case bullet(String)
+    case quote(String)
+    case code(String)
+    case divider
+}
+
+func parseMarkdown(_ md: String) -> [MDBlock] {
+    var blocks: [MDBlock] = []
+    var code: [String]? = nil
+    for raw in md.components(separatedBy: "\n") {
+        let t = raw.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("```") {
+            if code == nil { code = [] } else { blocks.append(.code(code!.joined(separator: "\n"))); code = nil }
+            continue
+        }
+        if code != nil { code!.append(raw); continue }
+        if t.isEmpty { continue }
+        if t == "---" || t == "***" { blocks.append(.divider); continue }
+        if t.hasPrefix("#### ") { blocks.append(.heading(4, String(t.dropFirst(5)))); continue }
+        if t.hasPrefix("### ") { blocks.append(.heading(3, String(t.dropFirst(4)))); continue }
+        if t.hasPrefix("## ") { blocks.append(.heading(2, String(t.dropFirst(3)))); continue }
+        if t.hasPrefix("# ") { blocks.append(.heading(1, String(t.dropFirst(2)))); continue }
+        if t.hasPrefix("- ") || t.hasPrefix("* ") { blocks.append(.bullet(String(t.dropFirst(2)))); continue }
+        if t.hasPrefix("> ") { blocks.append(.quote(String(t.dropFirst(2)))); continue }
+        blocks.append(.paragraph(t))
+    }
+    if let c = code { blocks.append(.code(c.joined(separator: "\n"))) }
+    return blocks
+}
+
+func mdInline(_ s: String) -> AttributedString {
+    (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+        ?? AttributedString(s)
+}
+
+struct MarkdownView: View {
+    let markdown: String
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(parseMarkdown(markdown).enumerated()), id: \.offset) { _, b in
+                    block(b)
+                }
+            }
+            .textSelection(.enabled)
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func block(_ b: MDBlock) -> some View {
+        switch b {
+        case .heading(let lvl, let txt):
+            Text(mdInline(txt)).font(headingFont(lvl)).bold().padding(.top, lvl <= 2 ? 10 : 4)
+        case .paragraph(let txt):
+            Text(mdInline(txt))
+        case .bullet(let txt):
+            HStack(alignment: .top, spacing: 8) { Text("•"); Text(mdInline(txt)) }
+        case .quote(let txt):
+            Text(mdInline(txt)).foregroundColor(.secondary).padding(.leading, 12)
+                .overlay(Rectangle().fill(Color.secondary.opacity(0.4)).frame(width: 3), alignment: .leading)
+        case .code(let txt):
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(txt).font(.system(.callout, design: .monospaced)).padding(10)
+            }
+            .background(Color(nsColor: .textBackgroundColor)).cornerRadius(6)
+        case .divider:
+            Divider().padding(.vertical, 4)
+        }
+    }
+
+    private func headingFont(_ lvl: Int) -> Font {
+        switch lvl {
+        case 1: return .title
+        case 2: return .title2
+        case 3: return .title3
+        default: return .headline
+        }
+    }
+}
+
+struct ManualView: View {
+    var body: some View {
+        MarkdownView(markdown: Self.load()).frame(minWidth: 640, minHeight: 540)
+    }
+    static func load() -> String {
+        if let url = Bundle.main.url(forResource: "MANUAL", withExtension: "md"),
+           let s = try? String(contentsOf: url, encoding: .utf8) {
+            return s
+        }
+        return "# Manual\n\nNão foi possível carregar o manual."
+    }
+}
+
+struct HelpCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+    var body: some Commands {
+        CommandGroup(replacing: .help) {
+            Button("Manual do Peapod") { openWindow(id: "manual") }
+                .keyboardShortcut("?", modifiers: [.command])
+        }
+    }
+}
+
 @main
 struct PeapodApp: App {
     init() {
@@ -481,5 +591,11 @@ struct PeapodApp: App {
             ContentView()
         }
         .defaultSize(width: 660, height: 500)
+        .commands { HelpCommands() }
+
+        Window("Manual do Peapod", id: "manual") {
+            ManualView()
+        }
+        .defaultSize(width: 800, height: 720)
     }
 }

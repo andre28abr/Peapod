@@ -25,6 +25,7 @@ chmod +x "$APP/Contents/Resources/peapod"
 cp Peapod.icns "$APP/Contents/Resources/Peapod.icns"
 mkdir -p "$APP/Contents/Resources/pt-BR.lproj"
 printf '/* Peapod — pt-BR */\n' > "$APP/Contents/Resources/pt-BR.lproj/Localizable.strings"
+cp "$ROOT/docs/MANUAL.md" "$APP/Contents/Resources/MANUAL.md"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
