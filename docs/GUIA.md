@@ -16,6 +16,8 @@ computador continua intacto.
 Cada caixinha dessas a gente chama de **sandbox**. O Peapod cria e cuida de
 várias (daí o nome: ervilhas numa vagem 🫛).
 
+![O sandbox isolado dentro do seu Mac](guia-caixa.png)
+
 ## Por que isso é útil
 
 Hoje a inteligência artificial **escreve e executa** código o tempo todo. Rodar
@@ -42,6 +44,10 @@ estar **ligado**.
 4. Aparece um **"criando…"** com um rodinha. *Na primeira vez* ele baixa o
    ambiente — é normal levar alguns segundos.
 5. Pronto! Seu primeiro **sandbox** aparece na lista. 🎉
+
+No fim, o ciclo é sempre o mesmo:
+
+![Criar, usar e descartar](guia-fluxo.png)
 
 ## O que dá pra fazer com um sandbox
 

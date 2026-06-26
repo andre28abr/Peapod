@@ -27,6 +27,7 @@ mkdir -p "$APP/Contents/Resources/pt-BR.lproj"
 printf '/* Peapod — pt-BR */\n' > "$APP/Contents/Resources/pt-BR.lproj/Localizable.strings"
 cp "$ROOT/docs/MANUAL.md" "$APP/Contents/Resources/MANUAL.md"
 cp "$ROOT/docs/GUIA.md" "$APP/Contents/Resources/GUIA.md"
+cp "$ROOT"/docs/guia-caixa.png "$ROOT"/docs/guia-fluxo.png "$APP/Contents/Resources/" 2>/dev/null || true
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

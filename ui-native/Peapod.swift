@@ -475,6 +475,7 @@ enum MDBlock {
     case bullet(String)
     case quote(String)
     case code(String)
+    case image(String)
     case divider
 }
 
@@ -496,6 +497,9 @@ func parseMarkdown(_ md: String) -> [MDBlock] {
         if t.hasPrefix("# ") { blocks.append(.heading(1, String(t.dropFirst(2)))); continue }
         if t.hasPrefix("- ") || t.hasPrefix("* ") { blocks.append(.bullet(String(t.dropFirst(2)))); continue }
         if t.hasPrefix("> ") { blocks.append(.quote(String(t.dropFirst(2)))); continue }
+        if t.hasPrefix("!["), let r = t.range(of: "]("), t.hasSuffix(")") {
+            blocks.append(.image(String(t[r.upperBound...].dropLast()))); continue
+        }
         blocks.append(.paragraph(t))
     }
     if let c = code { blocks.append(.code(c.joined(separator: "\n"))) }
@@ -505,6 +509,11 @@ func parseMarkdown(_ md: String) -> [MDBlock] {
 func mdInline(_ s: String) -> AttributedString {
     (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(s)
+}
+
+func mdImageURL(_ src: String) -> URL? {
+    let ns = src as NSString
+    return Bundle.main.url(forResource: ns.deletingPathExtension, withExtension: ns.pathExtension)
 }
 
 struct MarkdownView: View {
@@ -539,6 +548,12 @@ struct MarkdownView: View {
                 Text(txt).font(.system(.callout, design: .monospaced)).padding(10)
             }
             .background(Color(nsColor: .textBackgroundColor)).cornerRadius(6)
+        case .image(let src):
+            if let url = mdImageURL(src), let img = NSImage(contentsOf: url) {
+                Image(nsImage: img).resizable().scaledToFit().frame(maxWidth: 720).padding(.vertical, 4)
+            } else {
+                Text("[imagem: \(src)]").font(.caption).foregroundColor(.secondary)
+            }
         case .divider:
             Divider().padding(.vertical, 4)
         }
