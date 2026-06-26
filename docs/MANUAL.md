@@ -1,57 +1,7 @@
-# Manual do Peapod 🫛
+# Manual técnico do Peapod 🫛
 
-> Este manual tem duas partes: a **Parte 1 — Visão geral** explica, em linguagem
-> simples, o que o Peapod faz e como usar; a **Parte 2 — Manual técnico** detalha
-> a arquitetura, a segurança e todos os comandos, para profissionais. Um guia
-> ainda mais didático para leigos virá em um momento seguinte.
-
----
-
-# Parte 1 — Visão geral (para todos)
-
-## O que é o Peapod
-
-O Peapod cria **sandboxes**: ambientes Linux **isolados e descartáveis** onde se
-pode rodar código sem tocar no seu computador. Cada **ervilha** é um sandbox
-isolado; a **vagem** (Peapod) cria e cuida de várias, uma por tarefa.
-
-Quando você termina, joga a ervilha fora — e o seu Mac continua intacto.
-
-## O problema que ele resolve
-
-Hoje as pessoas pedem para uma IA (Claude, Cursor, etc.) **escrever e rodar**
-código o tempo todo. Se esse código tiver um bug, um vírus, ou só fizer besteira
-(apagar arquivo, vazar dados, mexer na rede), o estrago é no **seu** computador.
-
-O Peapod coloca esse código numa caixa fechada: a IA roda lá dentro, você vê o
-resultado, e descarta a caixa. Por padrão a caixa **não tem internet**.
-
-## Como usar (o jeito mais comum)
-
-- **Pelo app:** abra o Peapod, clique em um **modelo** (Python, Node, Postgres…)
-  ou digite uma imagem personalizada. O sandbox aparece na lista; nele você pode
-  rodar comandos, pausar, tirar snapshot e apagar.
-- **Por uma IA (MCP):** com o Peapod ligado ao Claude Code, peça *"rode esse
-  script num sandbox do Peapod"* — a IA cria, executa e descarta sozinha.
-- **Pelo terminal:** `peapod sandbox create python:3.12-slim`, depois
-  `peapod sandbox exec <id> ...`, e `peapod sandbox rm <id>`.
-
-## Conceitos em uma frase
-
-- **Sandbox:** o ambiente isolado e descartável onde o código roda.
-- **Imagem:** o "molde" do ambiente (ex.: `python:3.12-slim`).
-- **Snapshot:** uma foto do sandbox que você pode "clonar" (fork) depois.
-- **Backend:** o motor que faz o isolamento (Docker/OrbStack, ou microVM da Apple).
-
-## O que ele **não** é
-
-Não é para rodar serviços de produção nem substituir o Docker Desktop em apps de
-longa duração. É para execução **efêmera, isolada e não-confiável** — o
-"laboratório selado", não o servidor.
-
----
-
-# Parte 2 — Manual técnico (avançado)
+> Referência técnica completa. Para uma introdução sem jargão, veja o guia
+> **"Para todos"** (na mesma janela do app, ou em [docs/GUIA.md](GUIA.md)).
 
 ## Arquitetura
 

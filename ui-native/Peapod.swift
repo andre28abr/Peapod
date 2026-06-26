@@ -555,15 +555,27 @@ struct MarkdownView: View {
 }
 
 struct ManualView: View {
+    @State private var tab = 0 // 0 = Para todos, 1 = Técnico
     var body: some View {
-        MarkdownView(markdown: Self.load()).frame(minWidth: 640, minHeight: 540)
+        VStack(spacing: 0) {
+            Picker("", selection: $tab) {
+                Text("Para todos").tag(0)
+                Text("Técnico").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(10)
+            Divider()
+            MarkdownView(markdown: Self.load(tab == 0 ? "GUIA" : "MANUAL"))
+        }
+        .frame(minWidth: 660, minHeight: 560)
     }
-    static func load() -> String {
-        if let url = Bundle.main.url(forResource: "MANUAL", withExtension: "md"),
+    static func load(_ name: String) -> String {
+        if let url = Bundle.main.url(forResource: name, withExtension: "md"),
            let s = try? String(contentsOf: url, encoding: .utf8) {
             return s
         }
-        return "# Manual\n\nNão foi possível carregar o manual."
+        return "# \(name)\n\nNão foi possível carregar."
     }
 }
 
