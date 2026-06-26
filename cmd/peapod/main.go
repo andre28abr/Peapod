@@ -96,7 +96,7 @@ func main() {
 	case "proxy":
 		runProxy(args[1:])
 	case "version":
-		fmt.Println("peapod 0.1.0")
+		fmt.Println("peapod 0.2.0")
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:

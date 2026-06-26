@@ -46,7 +46,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key><string>pt-BR</string>
   <key>CFBundleLocalizations</key><array><string>pt-BR</string></array>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleShortVersionString</key><string>0.2.0</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>CFBundleIconFile</key><string>Peapod</string>
   <key>NSHighResolutionCapable</key><true/>
