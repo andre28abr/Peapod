@@ -9,7 +9,7 @@
 > segurança**.
 
 [![ci](https://github.com/andre28abr/Peapod/actions/workflows/ci.yml/badge.svg)](https://github.com/andre28abr/Peapod/actions/workflows/ci.yml)
-![Status](https://img.shields.io/badge/status-v0.1%20·%20funcional-success)
+![Status](https://img.shields.io/badge/status-v0.3%20·%20est%C3%A1vel-success)
 ![Go](https://img.shields.io/badge/Go-1.26-00add8?logo=go&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-12%20ferramentas-7C3AED)

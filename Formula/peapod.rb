@@ -26,6 +26,6 @@ class Peapod < Formula
   end
 
   test do
-    assert_match "peapod 0.2.0", shell_output("#{bin}/peapod version")
+    assert_match "peapod 0.3.0", shell_output("#{bin}/peapod version")
   end
 end
