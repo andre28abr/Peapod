@@ -693,9 +693,15 @@ struct HelpCommands: Commands {
 @main
 struct PeapodApp: App {
     init() {
-        // Força a interface e os menus padrão do macOS em português (pt-BR),
-        // independentemente do idioma do sistema.
-        UserDefaults.standard.set(["pt-BR"], forKey: "AppleLanguages")
+        // A interface do app é em português (pt-BR). Por padrão os menus padrão
+        // do macOS também são forçados para pt-BR; quem preferir os menus no
+        // idioma do sistema desliga isso uma vez com:
+        //   defaults write dev.peapod.ui PeapodFollowSystemLanguage -bool true
+        if UserDefaults.standard.bool(forKey: "PeapodFollowSystemLanguage") {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.set(["pt-BR"], forKey: "AppleLanguages")
+        }
         // App utilitário de janela única — remove o "+" de novas abas no título.
         NSWindow.allowsAutomaticWindowTabbing = false
     }

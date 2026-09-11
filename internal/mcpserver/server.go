@@ -1,5 +1,5 @@
-// Package mcpserver exposes the Peapod núcleo to AI agents over MCP — the Phase 1
-// way agents create and drive disposable sandboxes.
+// Package mcpserver exposes the Peapod núcleo to AI agents over MCP: the way
+// agents create and drive disposable sandboxes.
 package mcpserver
 
 import (
@@ -100,7 +100,7 @@ func New(mgr *sandbox.Manager) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "peapod_snapshot",
-		Description: "Snapshot a sandbox's filesystem so it can be forked later. (Phase 2 preview.)",
+		Description: "Snapshot a sandbox's filesystem (as an image) so it can be forked later.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in snapIn) (*mcp.CallToolResult, snapOut, error) {
 		ref, err := mgr.Snapshot(ctx, in.ID, in.Name)
 		if err != nil {
@@ -111,7 +111,7 @@ func New(mgr *sandbox.Manager) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "peapod_fork",
-		Description: "Create a new sandbox from a snapshot. (Phase 2 preview.)",
+		Description: "Create a new sandbox from a snapshot; takes the same network/allow options as peapod_sandbox_create.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in forkIn) (*mcp.CallToolResult, createOut, error) {
 		sb, err := mgr.Fork(ctx, in.Snapshot, sandbox.Spec{Name: in.Name, Network: sandbox.NetworkPolicy(in.Network), Allow: in.Allow})
 		if err != nil {

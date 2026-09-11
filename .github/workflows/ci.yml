@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  go:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +15,23 @@ jobs:
           go-version-file: 'go.mod'
       - name: vet
         run: go vet ./...
-      - name: test
-        run: go test ./...
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - name: test (race detector)
+        run: go test -race ./...
       - name: build
         run: go build ./...
+
+  app:
+    # Builds the SwiftUI app exactly like a release does, so a Swift break or a
+    # wrong minimum macOS can't slip through unnoticed.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: build Peapod.app + Peapod.dmg
+        run: bash ui-native/build.sh
+      - name: app really targets macOS 13+
+        run: otool -l ui-native/Peapod.app/Contents/MacOS/Peapod | grep -A3 LC_BUILD_VERSION | grep -q 'minos 13.0'

@@ -92,7 +92,7 @@ Não é para rodar serviços de produção nem substituir o Docker Desktop em ap
 
 ## ⬇️ Instalar (macOS)
 
-**[⬇️ Baixar a última versão — Peapod.dmg](https://github.com/andre28abr/Peapod/releases/latest)** · abra o `.dmg` e arraste o **Peapod** para *Aplicativos*.
+**[⬇️ Baixar a última versão — Peapod.dmg](https://github.com/andre28abr/Peapod/releases/latest)** · abra o `.dmg` e arraste o **Peapod** para *Aplicativos*. (macOS 13+, **Apple Silicon**; em Intel, compile a partir do código.)
 
 > Na primeira vez, como o app é assinado *ad-hoc* (não notarizado pela Apple), o macOS exibe um aviso de segurança. Clique com o **botão direito em Peapod → Abrir → Abrir** — depois disso, abre com duplo-clique normalmente.
 >

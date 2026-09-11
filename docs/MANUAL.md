@@ -175,7 +175,11 @@ SwiftUI, janela única, com o binário `peapod` **embutido** em
 `Contents/Resources` (zero configuração). Localizado em pt-BR. Construído por
 `ui-native/build.sh`, que também gera o `.icns`, o `.dmg`, assina ad-hoc e
 incrementa `CFBundleVersion` a cada build (evita ícone em cache). Ele encontra o
-`docker`/OrbStack aumentando o `PATH` ao chamar o `peapod`.
+`docker`/OrbStack aumentando o `PATH` ao chamar o `peapod`. Requer **macOS 13+**
+e **Apple Silicon** (arm64). Toda chamada ao `peapod` roda fora da thread
+principal; falhas aparecem num aviso fixo na janela (com a causa). Os menus
+padrão do macOS são forçados para pt-BR — para segui-los no idioma do sistema:
+`defaults write dev.peapod.ui PeapodFollowSystemLanguage -bool true`.
 
 ## Variáveis de ambiente
 
