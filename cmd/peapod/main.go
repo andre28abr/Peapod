@@ -18,6 +18,7 @@ import (
 	"peapod/internal/mcpserver"
 	"peapod/internal/proxy"
 	"peapod/internal/sandbox"
+	"peapod/internal/version"
 	"peapod/internal/web"
 )
 
@@ -96,7 +97,7 @@ func main() {
 	case "proxy":
 		runProxy(args[1:])
 	case "version":
-		fmt.Println("peapod 0.2.0")
+		fmt.Println("peapod " + version.Version)
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:

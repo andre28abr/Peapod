@@ -5,6 +5,8 @@ set -e
 cd "$(dirname "$0")"
 ROOT="$(cd .. && pwd)"
 APP="Peapod.app"
+# Single source of truth for the version: internal/version/version.go
+VERSION="$(sed -n 's/.*Version = "\([^"]*\)".*/\1/p' "$ROOT/internal/version/version.go")"
 
 echo "==> building peapod CLI (Go)"
 ( cd "$ROOT" && go build -o ui-native/peapod-bin ./cmd/peapod )
@@ -23,7 +25,9 @@ rm -rf Peapod.iconset
 echo "==> building app (Swift)"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -parse-as-library -O -o "$APP/Contents/MacOS/Peapod" Peapod.swift
+# -target pins the real minimum macOS (must match LSMinimumSystemVersion and the
+# cask); without it the binary silently requires the build host's macOS version.
+swiftc -parse-as-library -O -target arm64-apple-macos13.0 -o "$APP/Contents/MacOS/Peapod" Peapod.swift
 mv peapod-bin "$APP/Contents/Resources/peapod"
 chmod +x "$APP/Contents/Resources/peapod"
 mv "peapod-linux-$LGOARCH" "$APP/Contents/Resources/peapod-linux-$LGOARCH"
@@ -57,6 +61,7 @@ PLIST
 BUILDV="$(date +%Y%m%d%H%M%S)"
 /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILDV" "$APP/Contents/Info.plist" 2>/dev/null \
   || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILDV" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 
 echo "==> signing (ad-hoc)"
 codesign --force --deep --sign - "$APP" 2>/dev/null || echo "   (codesign skipped)"

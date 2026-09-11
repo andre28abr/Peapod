@@ -28,11 +28,15 @@ func TestCreateArgs(t *testing.T) {
 		"--memory 512m",
 		"--pids-limit 256",
 		"-w /work",
+		"-e HTTP_PROXY=", // no firewall ⇒ proxy env explicitly emptied
 		"alpine sleep infinity",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("createArgs missing %q\n got: %s", want, got)
 		}
+	}
+	if strings.Contains(got, "HTTP_PROXY=http") {
+		t.Errorf("a no-firewall sandbox must not point at a proxy: %s", got)
 	}
 }
 
@@ -94,5 +98,39 @@ func TestIntegration(t *testing.T) {
 	}
 	if !strings.Contains(res.Stdout, "hi") {
 		t.Errorf("exec stdout = %q, want it to contain 'hi'", res.Stdout)
+	}
+
+	// The exec timeout must be enforced *inside* the sandbox: a long sleep gets
+	// killed by the watchdog (non-zero exit) instead of outliving the client.
+	start := time.Now()
+	res, err = mgr.Exec(ctx, sb.ID, []string{"sleep", "60"}, sandbox.ExecOpts{Timeout: 2 * time.Second})
+	if err != nil {
+		t.Fatalf("exec with timeout: %v", err)
+	}
+	if el := time.Since(start); el > 15*time.Second {
+		t.Errorf("timeout not enforced: took %v", el)
+	}
+	if res.ExitCode == 0 {
+		t.Errorf("timed-out command should not exit 0 (got %d)", res.ExitCode)
+	}
+	// Match the exact timed-out command (the sandbox's own PID-1 `sleep infinity`
+	// must be ignored); the [s] trick keeps grep from matching itself.
+	res, _ = mgr.Exec(ctx, sb.ID, []string{"sh", "-c", "ps -o args | grep -q '[s]leep 60' && echo alive || echo none"}, sandbox.ExecOpts{})
+	if !strings.Contains(res.Stdout, "none") {
+		t.Errorf("sleep 60 survived the timeout inside the sandbox: %q", res.Stdout)
+	}
+
+	// WriteFile must treat shell metacharacters in the path literally.
+	tricky := "/work/a$(echo pwned)/b`id`.txt"
+	if err := mgr.WriteFile(ctx, sb.ID, tricky, []byte("safe"), 0o644); err != nil {
+		t.Fatalf("write tricky path: %v", err)
+	}
+	data, err := mgr.ReadFile(ctx, sb.ID, tricky)
+	if err != nil || string(data) != "safe" {
+		t.Errorf("tricky path round-trip = %q, %v", data, err)
+	}
+	res, _ = mgr.Exec(ctx, sb.ID, []string{"sh", "-c", "ls -d /work/apwned /work/a 2>/dev/null || echo clean"}, sandbox.ExecOpts{})
+	if !strings.Contains(res.Stdout, "clean") {
+		t.Errorf("path was expanded by the shell: %q", res.Stdout)
 	}
 }

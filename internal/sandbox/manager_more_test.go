@@ -2,12 +2,66 @@ package sandbox_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"peapod/internal/driver/mock"
 	"peapod/internal/sandbox"
 )
+
+// TestRejectsUnknownNetwork guards the fail-closed rule: an unknown policy must
+// error instead of falling through to the runtime's default (full) network.
+func TestRejectsUnknownNetwork(t *testing.T) {
+	ctx := context.Background()
+	mgr := sandbox.NewManager(mock.New())
+	for _, bad := range []string{"bridge", "egres", "host", "yes"} {
+		if _, err := mgr.Create(ctx, sandbox.Spec{Image: "alpine", Network: sandbox.NetworkPolicy(bad)}); err == nil {
+			t.Errorf("Create with network %q should fail", bad)
+		}
+	}
+	sb, err := mgr.Create(ctx, sandbox.Spec{Image: "alpine", Network: sandbox.NetworkEgress})
+	if err != nil {
+		t.Fatalf("egress should be accepted: %v", err)
+	}
+	snap, err := mgr.Snapshot(ctx, sb.ID, "v1")
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if _, err := mgr.Fork(ctx, snap, sandbox.Spec{Network: "bridge"}); err == nil {
+		t.Error("Fork with an unknown network should fail")
+	}
+}
+
+// TestExecTimeoutWrapsButAuditsOriginal checks that a timeout wraps the command
+// in the in-sandbox watchdog while the audit trail records what the caller ran.
+func TestExecTimeoutWrapsButAuditsOriginal(t *testing.T) {
+	t.Setenv("PEAPOD_HISTORY_DIR", t.TempDir())
+	ctx := context.Background()
+	mgr := sandbox.NewManager(mock.New())
+	sb, err := mgr.Create(ctx, sandbox.Spec{Image: "alpine"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	res, err := mgr.Exec(ctx, sb.ID, []string{"echo", "hi"}, sandbox.ExecOpts{Timeout: 2 * time.Second})
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	// The mock echoes the argv it received: the watchdog must be in front...
+	if !strings.Contains(res.Stdout, "sleep") || !strings.Contains(res.Stdout, "echo hi") {
+		t.Errorf("driver did not receive the wrapped command: %q", res.Stdout)
+	}
+	// ...but the audit trail keeps the caller's command, not the wrapper.
+	hist, _ := mgr.History(sb.ID)
+	if len(hist) != 1 || hist[0].Command != "echo hi" {
+		t.Errorf("history = %+v, want the original 'echo hi'", hist)
+	}
+	// No timeout ⇒ no wrapper.
+	res, _ = mgr.Exec(ctx, sb.ID, []string{"echo", "plain"}, sandbox.ExecOpts{})
+	if strings.Contains(res.Stdout, "sleep") {
+		t.Errorf("no timeout must not wrap: %q", res.Stdout)
+	}
+}
 
 // TestHistoryAndReap covers the audit trail (every exec is recorded) and reaping
 // by age, using a temp history dir so the test never touches ~/.peapod.

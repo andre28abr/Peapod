@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -48,6 +50,14 @@ func applyDefaults(spec *Spec) {
 	}
 }
 
+// validate rejects specs the drivers can't enforce safely (fail closed).
+func validate(spec Spec) error {
+	if !spec.Network.Valid() {
+		return fmt.Errorf("invalid network policy %q (use %q or %q)", spec.Network, NetworkNone, NetworkEgress)
+	}
+	return nil
+}
+
 func (m *Manager) tag(spec *Spec) string {
 	id := newID()
 	if spec.Labels == nil {
@@ -64,6 +74,9 @@ func (m *Manager) Create(ctx context.Context, spec Spec) (Sandbox, error) {
 		return Sandbox{}, fmt.Errorf("image is required")
 	}
 	applyDefaults(&spec)
+	if err := validate(spec); err != nil {
+		return Sandbox{}, err
+	}
 	m.tag(&spec)
 	return m.drv.Create(ctx, spec)
 }
@@ -85,11 +98,36 @@ func (m *Manager) Exec(ctx context.Context, id string, argv []string, opts ExecO
 	if opts.Workdir == "" {
 		opts.Workdir = sb.Workdir
 	}
-	res, err := m.drv.Exec(ctx, sb.Ref, argv, opts)
+	runArgv := argv
+	if opts.Timeout > 0 {
+		// Enforce the deadline inside the sandbox too: cancelling only the
+		// client process would leave the command running in the container.
+		runArgv = timeoutWrap(argv, opts.Timeout)
+		opts.Timeout += timeoutGrace // client-side cancel stays as the fallback
+	}
+	res, err := m.drv.Exec(ctx, sb.Ref, runArgv, opts)
 	if err == nil {
-		m.record(id, argv, res)
+		m.record(id, argv, res) // audit the command as the caller wrote it
 	}
 	return res, err
+}
+
+// timeoutGrace is how much longer than the in-sandbox watchdog the client
+// waits, so the watchdog (and its exit code 137) wins the race.
+const timeoutGrace = 5 * time.Second
+
+// timeoutWrap runs argv under a POSIX-sh watchdog that SIGKILLs it after d.
+// It needs only sh, sleep and kill — present in every image, unlike coreutils'
+// `timeout`. The command's exit status is preserved; a kill surfaces as 137.
+// (The direct child and its process group are killed; deeper orphans of a
+// compound command may survive until the sandbox is destroyed.)
+func timeoutWrap(argv []string, d time.Duration) []string {
+	secs := int(math.Ceil(d.Seconds()))
+	if secs < 1 {
+		secs = 1
+	}
+	const script = `t=$1; shift; "$@" & p=$!; (sleep "$t"; kill -9 -- -"$p" 2>/dev/null; kill -9 "$p" 2>/dev/null) & w=$!; wait "$p"; r=$?; kill "$w" 2>/dev/null; exit $r`
+	return append([]string{"sh", "-c", script, "sh", strconv.Itoa(secs)}, argv...)
 }
 
 // WriteFile writes a file into the sandbox.
@@ -135,6 +173,9 @@ func (m *Manager) Snapshot(ctx context.Context, id, name string) (string, error)
 // Fork creates a new sandbox from a snapshot (Phase 2 entry point).
 func (m *Manager) Fork(ctx context.Context, snapshotRef string, spec Spec) (Sandbox, error) {
 	applyDefaults(&spec)
+	if err := validate(spec); err != nil {
+		return Sandbox{}, err
+	}
 	m.tag(&spec)
 	return m.drv.Fork(ctx, snapshotRef, spec)
 }

@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -255,8 +254,9 @@ func (d *Driver) Exec(ctx context.Context, ref string, argv []string, opts sandb
 
 // WriteFile pipes data into the microVM via `exec --interactive ... cat > path`.
 func (d *Driver) WriteFile(ctx context.Context, ref, p string, data []byte, mode uint32) error {
-	script := fmt.Sprintf("set -e; mkdir -p %q; cat > %q", path.Dir(p), p)
-	_, errOut, code, err := d.run(ctx, data, "exec", "--interactive", ref, "sh", "-c", script)
+	// Path as a positional arg (never interpolated) so shell metachars are inert.
+	const script = `set -e; mkdir -p "$(dirname "$1")"; cat > "$1"`
+	_, errOut, code, err := d.run(ctx, data, "exec", "--interactive", ref, "sh", "-c", script, "sh", p)
 	if err != nil {
 		return err
 	}

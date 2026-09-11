@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -117,16 +116,23 @@ func createArgs(id string, spec sandbox.Spec, created time.Time, fwNet string) [
 	if spec.Name != "" {
 		args = append(args, "--label", "peapod.name="+spec.Name)
 	}
-	switch {
-	case fwNet != "":
+	if fwNet != "" {
 		// Only route off the sandbox is the proxy sidecar; point tools at it.
 		args = append(args, "--network", fwNet)
 		proxyURL := "http://" + fwSidecarName(id) + ":8899"
-		for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+		for _, k := range proxyEnvKeys {
 			args = append(args, "-e", k+"="+proxyURL)
 		}
-	case spec.Network == sandbox.NetworkNone:
-		args = append(args, "--network", "none")
+	} else {
+		// No firewall ⇒ no proxy env. Set them empty explicitly: docker commit
+		// persists a container's Env, so a snapshot of a firewalled sandbox would
+		// otherwise carry a dead sidecar URL into every fork.
+		for _, k := range proxyEnvKeys {
+			args = append(args, "-e", k+"=")
+		}
+		if spec.Network == sandbox.NetworkNone {
+			args = append(args, "--network", "none")
+		}
 	}
 	if spec.Resources.CPUs > 0 {
 		args = append(args, "--cpus", strconv.FormatFloat(spec.Resources.CPUs, 'g', -1, 64))
@@ -156,6 +162,9 @@ func createArgs(id string, spec sandbox.Spec, created time.Time, fwNet string) [
 
 func fwNetName(id string) string     { return "peapod-net-" + id }
 func fwSidecarName(id string) string { return "peapod-fw-" + id }
+
+// proxyEnvKeys are the env vars HTTP tooling honours for an egress proxy.
+var proxyEnvKeys = []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"}
 
 func fileExists(p string) bool {
 	info, err := os.Stat(p)
@@ -333,10 +342,12 @@ func (d *Driver) Exec(ctx context.Context, ref string, argv []string, opts sandb
 	return sandbox.ExecResult{Stdout: out, Stderr: errOut, ExitCode: code}, nil
 }
 
-// WriteFile pipes data into the container via `exec -i ... cat > path`.
+// WriteFile pipes data into the container via `exec -i ... cat > path`. The
+// path travels as a positional argument — never interpolated into the script —
+// so shell metacharacters in it ($, backticks, quotes) stay inert.
 func (d *Driver) WriteFile(ctx context.Context, ref, p string, data []byte, mode uint32) error {
-	script := fmt.Sprintf("set -e; mkdir -p %q; cat > %q", path.Dir(p), p)
-	_, errOut, code, err := d.run(ctx, data, "exec", "-i", ref, "sh", "-c", script)
+	const script = `set -e; mkdir -p "$(dirname "$1")"; cat > "$1"`
+	_, errOut, code, err := d.run(ctx, data, "exec", "-i", ref, "sh", "-c", script, "sh", p)
 	if err != nil {
 		return err
 	}

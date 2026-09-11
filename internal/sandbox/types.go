@@ -18,6 +18,11 @@ const (
 	NetworkEgress NetworkPolicy = "egress"
 )
 
+// Valid reports whether the policy is one Peapod knows how to enforce. Anything
+// else is rejected up front so a typo can't silently fall through to the
+// runtime's default network (i.e. full access).
+func (n NetworkPolicy) Valid() bool { return n == NetworkNone || n == NetworkEgress }
+
 // Resources caps a sandbox's resource usage. Zero means "apply the safe default".
 type Resources struct {
 	CPUs      float64 `json:"cpus,omitempty"`

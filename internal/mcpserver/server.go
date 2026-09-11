@@ -11,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"peapod/internal/sandbox"
+	"peapod/internal/version"
 )
 
 // defaultExecTimeout caps agent-driven exec calls that don't specify one.
@@ -18,7 +19,7 @@ const defaultExecTimeout = 120 * time.Second
 
 // New builds the Peapod MCP server backed by mgr.
 func New(mgr *sandbox.Manager) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "peapod", Version: "0.1.0"}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "peapod", Version: version.Version}, nil)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "peapod_sandbox_create",
@@ -242,7 +243,7 @@ type execIn struct {
 	ID             string `json:"id" jsonschema:"sandbox id from peapod_sandbox_create"`
 	Command        string `json:"command" jsonschema:"shell command to run inside the sandbox"`
 	Workdir        string `json:"workdir,omitempty" jsonschema:"working directory (defaults to the sandbox workdir)"`
-	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"max seconds to wait; 0 means no limit"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"max seconds to wait; omit or 0 = 120s default, -1 = no limit. Enforced inside the sandbox (the command is killed), exit code 137 on timeout"`
 }
 
 type execOut struct {

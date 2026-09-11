@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"peapod/internal/sandbox"
 )
 
-// Serve runs the dashboard on addr until ctx is cancelled.
-func Serve(ctx context.Context, mgr *sandbox.Manager, addr string) error {
+// Handler returns the dashboard's HTTP handler (the page plus the JSON API).
+func Handler(mgr *sandbox.Manager) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +39,9 @@ func Serve(ctx context.Context, mgr *sandbox.Manager, addr string) error {
 			}
 			writeJSON(w, map[string]any{"sandboxes": boxes})
 		case http.MethodPost:
+			if !guardMutation(w, r) {
+				return
+			}
 			var in struct {
 				Image   string `json:"image"`
 				Network string `json:"network"`
@@ -72,7 +77,12 @@ func Serve(ctx context.Context, mgr *sandbox.Manager, addr string) error {
 		writeJSON(w, map[string]any{"snapshots": snaps})
 	})
 
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	return mux
+}
+
+// Serve runs the dashboard on addr until ctx is cancelled.
+func Serve(ctx context.Context, mgr *sandbox.Manager, addr string) error {
+	srv := &http.Server{Addr: addr, Handler: Handler(mgr), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		_ = srv.Close()
@@ -81,6 +91,28 @@ func Serve(ctx context.Context, mgr *sandbox.Manager, addr string) error {
 		return err
 	}
 	return nil
+}
+
+// guardMutation blocks cross-site and non-JSON mutating requests, so a web page
+// open in the user's browser can't drive the local API (CSRF). Requiring a JSON
+// content-type forces a CORS preflight that a foreign origin never passes;
+// Sec-Fetch-Site and Origin catch the rest.
+func guardMutation(w http.ResponseWriter, r *http.Request) bool {
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		http.Error(w, "content-type must be application/json", http.StatusUnsupportedMediaType)
+		return false
+	}
+	if s := r.Header.Get("Sec-Fetch-Site"); s != "" && s != "same-origin" && s != "none" {
+		http.Error(w, "cross-site request blocked", http.StatusForbidden)
+		return false
+	}
+	if o := r.Header.Get("Origin"); o != "" {
+		if u, err := url.Parse(o); err != nil || u.Host != r.Host {
+			http.Error(w, "cross-site request blocked", http.StatusForbidden)
+			return false
+		}
+	}
+	return true
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -97,6 +129,9 @@ func writeErr(w http.ResponseWriter, err error) {
 func idAction(w http.ResponseWriter, r *http.Request, fn func(context.Context, string) error) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !guardMutation(w, r) {
 		return
 	}
 	var in struct {
