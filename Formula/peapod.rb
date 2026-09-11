@@ -1,10 +1,11 @@
 # Homebrew formula for Peapod (installs the `peapod` CLI + MCP server).
 #
-# Install the tagged release straight from this formula:
-#   brew install https://raw.githubusercontent.com/andre28abr/Peapod/main/Formula/peapod.rb
+# Published through the tap github.com/andre28abr/homebrew-peapod (Homebrew 6
+# only installs formulae from taps):
+#   brew tap andre28abr/peapod && brew trust andre28abr/peapod && brew install peapod
 #
-# Or the latest dev build from main:
-#   brew install --HEAD https://raw.githubusercontent.com/andre28abr/Peapod/main/Formula/peapod.rb
+# Latest dev build from main:
+#   brew install --HEAD andre28abr/peapod/peapod
 class Peapod < Formula
   desc "Disposable, isolated sandboxes for AI agents"
   homepage "https://github.com/andre28abr/Peapod"
