@@ -109,6 +109,11 @@ func (d *Driver) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Sandbox
 	if id == "" {
 		return sandbox.Sandbox{}, errors.New("missing peapod.id label (call via Manager)")
 	}
+	if len(spec.Allow) > 0 {
+		// Fail closed rather than silently start a sandbox with no network and
+		// no proxy, which would look like a broken allowlist.
+		return sandbox.Sandbox{}, errors.New("the allowlist firewall (--allow) is not supported on the apple-container backend yet; use the oci backend")
+	}
 	created := time.Now()
 	_, errOut, code, err := d.run(ctx, nil, createArgs(id, spec, created)...)
 	if err != nil {

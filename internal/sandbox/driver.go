@@ -80,3 +80,11 @@ type Statser interface {
 type SnapshotDiffer interface {
 	DiffSnapshots(ctx context.Context, a, b string) (SnapshotDiff, error)
 }
+
+// Sweeper is an optional capability: remove leftover backend resources (e.g.
+// firewall sidecars and networks) whose sandbox no longer exists — say, because
+// peapod was killed mid-setup. liveIDs are the sandboxes that still exist and
+// must be left alone. Returns the names of the resources removed.
+type Sweeper interface {
+	Sweep(ctx context.Context, liveIDs []string) ([]string, error)
+}

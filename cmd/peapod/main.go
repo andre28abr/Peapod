@@ -56,7 +56,7 @@ commands:
   down [-f peapod.json]               stop the group
   ps [-f peapod.json]                 list the group
   templates [--json]                  list quick-start images
-  proxy --allow d1,d2 [--addr :8899]  egress allowlist proxy for sandboxes
+  proxy --allow d1,d2 [--addr :8899] [--allow-private]  egress allowlist proxy
   version
 
 backend also via env PEAPOD_BACKEND (default: oci)
@@ -173,6 +173,12 @@ func runReap(ctx context.Context, args []string) {
 	for _, id := range ids {
 		fmt.Println("  -", id)
 	}
+	if swept, err := mgr.SweepOrphans(ctx); err == nil && len(swept) > 0 {
+		fmt.Printf("swept %d orphaned firewall resource(s)\n", len(swept))
+		for _, s := range swept {
+			fmt.Println("  -", s)
+		}
+	}
 }
 
 func runPauseIdle(ctx context.Context, args []string) {
@@ -209,10 +215,11 @@ func runProxy(args []string) {
 	fs := flag.NewFlagSet("proxy", flag.ExitOnError)
 	allow := fs.String("allow", "", "comma-separated allowed domains")
 	addr := fs.String("addr", ":8899", "listen address")
+	allowPrivate := fs.Bool("allow-private", false, "let allowed domains resolve to private/loopback addresses (default off: anti-SSRF)")
 	_ = fs.Parse(args)
 	doms := splitComma(*allow)
 	fmt.Fprintf(os.Stderr, "peapod proxy on %s — allow: %v\n", *addr, doms)
-	if err := proxy.New(doms).ListenAndServe(*addr); err != nil {
+	if err := proxy.New(doms).AllowPrivate(*allowPrivate).ListenAndServe(*addr); err != nil {
 		fmt.Fprintln(os.Stderr, "peapod proxy:", err)
 		os.Exit(1)
 	}

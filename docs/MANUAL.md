@@ -52,7 +52,10 @@ implementa só o que suporta): `Checkpointer` (checkpoint/restore), `Logger`
   é burlável. O proxy roda o binário linux do peapod (`peapod-linux-<arch>`,
   embutido no app e instalado pela fórmula); sem ele, `--allow` **falha fechado**.
   Tudo é criado e destruído junto com o sandbox; `peapod proxy` segue disponível
-  para uso avulso.
+  para uso avulso. O proxy **recusa destinos que resolvam para IPs privados ou
+  loopback** (anti-SSRF por *DNS rebinding*; `--allow-private` desliga), e o
+  sidecar roda com limites de CPU/memória/PIDs e imagem fixada (`alpine:3.20`).
+  Disponível também pelo MCP (campo `allow`).
 - **Limites de recurso** por sandbox — defaults: **2 CPUs, 1024 MB de RAM, 512
   PIDs** (`--cpus`/`--memory`/`--pids-limit` no driver oci).
 - **Timeout de exec** — o caminho MCP aplica 120 s por padrão (`timeout_seconds`;
@@ -60,7 +63,8 @@ implementa só o que suporta): `Checkpointer` (checkpoint/restore), `Logger`
 - **Trilha de auditoria** — cada `exec` é gravado em
   `~/.peapod/history/<id>.jsonl` (comando, hora, código de saída, prévia da
   saída). Some quando o sandbox é destruído.
-- **Efemeridade** — `reap` (por idade) e `pause-idle`/auto-pause (por inatividade)
+- **Efemeridade** — `reap` (por inatividade: último `exec`, com fallback na
+  criação; também varre sidecars/redes órfãos do firewall) e `pause-idle`/auto-pause
   evitam acúmulo e consumo desnecessário.
 
 ## Ciclo de vida de um sandbox
@@ -108,7 +112,8 @@ peapod --backend oci|apple|mock <command>
 
 Inicie com `peapod mcp` (transporte stdio). Ferramentas expostas a agentes:
 
-- `peapod_sandbox_create` — cria um sandbox (imagem, rede). Rede off por padrão.
+- `peapod_sandbox_create` — cria um sandbox (imagem, rede, `allow`). Rede off por
+  padrão; `allow` (lista de domínios) liga o firewall à prova de bypass.
 - `peapod_exec` — roda um comando e captura stdout/stderr/código de saída.
 - `peapod_write_file` / `peapod_read_file` — escreve/lê arquivo no sandbox.
 - `peapod_list` — lista os sandboxes.

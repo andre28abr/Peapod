@@ -166,6 +166,15 @@ func fwSidecarName(id string) string { return "peapod-fw-" + id }
 // proxyEnvKeys are the env vars HTTP tooling honours for an egress proxy.
 var proxyEnvKeys = []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"}
 
+// fwSidecarImage is pinned so the firewall sidecar is reproducible.
+const fwSidecarImage = "alpine:3.20"
+
+// sweepGrace keeps Sweep from tearing down the firewall of a sandbox that is
+// still being created (its container isn't listed yet).
+const sweepGrace = 2 * time.Minute
+
+var _ sandbox.Sweeper = (*Driver)(nil)
+
 func fileExists(p string) bool {
 	info, err := os.Stat(p)
 	return err == nil && !info.IsDir()
@@ -229,7 +238,9 @@ func (d *Driver) setupFirewall(ctx context.Context, id string, allow []string) (
 		return fail("%v", err)
 	}
 	// 2) sidecar on the egress (bridge) network, so its default route reaches out.
-	if err := step("start firewall sidecar", "run", "-d", "--name", sc, "--label", "peapod.fw="+id, "--network", "bridge", "alpine", "sleep", "infinity"); err != nil {
+	if err := step("start firewall sidecar", "run", "-d", "--name", sc, "--label", "peapod.fw="+id,
+		"--network", "bridge", "--cpus", "1", "--memory", "256m", "--pids-limit", "64",
+		fwSidecarImage, "sleep", "infinity"); err != nil {
 		return fail("%v", err)
 	}
 	// 3) attach the sidecar to the internal network so the sandbox can reach it.
@@ -257,42 +268,138 @@ func (d *Driver) teardownFirewall(ctx context.Context, id string) {
 	_, _, _, _ = d.run(ctx, nil, "network", "rm", fwNetName(id))
 }
 
-// Resolve reconstructs a sandbox from the container's labels (the backend is
-// the source of truth, so it works across CLI invocations).
-func (d *Driver) Resolve(ctx context.Context, id string) (sandbox.Sandbox, error) {
-	name := containerName(id)
-	out, _, code, err := d.run(ctx, nil, "inspect", "--format",
-		`{"labels":{{json .Config.Labels}},"paused":{{.State.Paused}}}`, name)
+// Sweep removes firewall sidecars and networks whose sandbox no longer exists
+// (peapod killed mid-setup, a failed create…). Resources younger than
+// sweepGrace are left alone so a sandbox still being created isn't torn down
+// under it. Returns the names removed.
+func (d *Driver) Sweep(ctx context.Context, liveIDs []string) ([]string, error) {
+	live := map[string]bool{}
+	for _, id := range liveIDs {
+		live[id] = true
+	}
+	orphans := func(kind string, listArgs ...string) ([]string, error) {
+		out, errOut, code, err := d.run(ctx, nil, listArgs...)
+		if err != nil {
+			return nil, err
+		}
+		if code != 0 {
+			return nil, fmt.Errorf("sweep %ss: %s", kind, strings.TrimSpace(errOut))
+		}
+		var names []string
+		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+			name, id, ok := strings.Cut(strings.TrimSpace(line), "|")
+			if !ok || name == "" || live[id] || d.youngerThan(ctx, kind, name, sweepGrace) {
+				continue
+			}
+			names = append(names, name)
+		}
+		return names, nil
+	}
+	var removed []string
+	sidecars, err := orphans("container", "ps", "-a", "--filter", "label=peapod.fw", "--format", `{{.Names}}|{{.Label "peapod.fw"}}`)
 	if err != nil {
-		return sandbox.Sandbox{}, err
+		return nil, err
 	}
-	if code != 0 {
-		return sandbox.Sandbox{}, sandbox.ErrNotFound
+	for _, n := range sidecars {
+		if _, _, code, err := d.run(ctx, nil, "rm", "-f", n); err == nil && code == 0 {
+			removed = append(removed, n)
+		}
 	}
-	var meta struct {
-		Labels map[string]string `json:"labels"`
-		Paused bool              `json:"paused"`
+	nets, err := orphans("network", "network", "ls", "--filter", "label=peapod.fw", "--format", `{{.Name}}|{{.Label "peapod.fw"}}`)
+	if err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &meta); err != nil {
-		return sandbox.Sandbox{}, fmt.Errorf("parse inspect: %w", err)
+	for _, n := range nets {
+		if _, _, code, err := d.run(ctx, nil, "network", "rm", n); err == nil && code == 0 {
+			removed = append(removed, n)
+		}
 	}
-	labels := meta.Labels
+	return removed, nil
+}
+
+// youngerThan reports whether the container/network was created less than dur
+// ago. Unknown ages count as young — better to leave a stray behind than to
+// delete something mid-creation.
+func (d *Driver) youngerThan(ctx context.Context, kind, name string, dur time.Duration) bool {
+	args := []string{"inspect", "--format", "{{.Created}}", name}
+	if kind == "network" {
+		args = append([]string{"network"}, args...)
+	}
+	out, _, code, err := d.run(ctx, nil, args...)
+	if err != nil || code != 0 {
+		return true
+	}
+	t, perr := time.Parse(time.RFC3339Nano, strings.TrimSpace(out))
+	if perr != nil {
+		return true
+	}
+	return time.Since(t) < dur
+}
+
+// inspectMeta is the slice of `docker inspect` output the driver needs.
+type inspectMeta struct {
+	Config struct {
+		Labels map[string]string `json:"Labels"`
+	} `json:"Config"`
+	State struct {
+		Paused bool `json:"Paused"`
+	} `json:"State"`
+}
+
+// inspect fetches metadata for the named containers in ONE runtime call.
+// Names that vanished in between are simply absent from the result.
+func (d *Driver) inspect(ctx context.Context, names ...string) ([]inspectMeta, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	out, errOut, code, err := d.run(ctx, nil, append([]string{"inspect"}, names...)...)
+	if err != nil {
+		return nil, err
+	}
+	var metas []inspectMeta
+	if jerr := json.Unmarshal([]byte(strings.TrimSpace(out)), &metas); jerr != nil {
+		if code != 0 {
+			return nil, fmt.Errorf("inspect failed: %s", strings.TrimSpace(errOut))
+		}
+		return nil, fmt.Errorf("parse inspect: %w", jerr)
+	}
+	return metas, nil
+}
+
+// fromMeta rebuilds a Sandbox from container labels (the backend is the source
+// of truth, so this works across CLI invocations).
+func (d *Driver) fromMeta(m inspectMeta) sandbox.Sandbox {
+	labels := m.Config.Labels
+	id := labels["peapod.id"]
 	var created time.Time
 	if ns, perr := strconv.ParseInt(labels["peapod.created"], 10, 64); perr == nil {
 		created = time.Unix(0, ns)
 	}
 	return sandbox.Sandbox{
-		ID: id, Backend: d.Name(), Ref: name,
+		ID: id, Backend: d.Name(), Ref: containerName(id),
 		Image:   labels["peapod.image"],
 		Name:    labels["peapod.name"],
 		Network: sandbox.NetworkPolicy(labels["peapod.network"]),
 		Workdir: labels["peapod.workdir"],
 		Created: created,
-		Paused:  meta.Paused,
-	}, nil
+		Paused:  m.State.Paused,
+	}
 }
 
-// List finds every peapod-managed container.
+// Resolve looks up one sandbox by id.
+func (d *Driver) Resolve(ctx context.Context, id string) (sandbox.Sandbox, error) {
+	metas, err := d.inspect(ctx, containerName(id))
+	if err != nil {
+		return sandbox.Sandbox{}, err
+	}
+	if len(metas) == 0 || metas[0].Config.Labels["peapod.id"] == "" {
+		return sandbox.Sandbox{}, sandbox.ErrNotFound
+	}
+	return d.fromMeta(metas[0]), nil
+}
+
+// List finds every peapod-managed container in two runtime calls (ps, then one
+// inspect for all the names) instead of one inspect per sandbox.
 func (d *Driver) List(ctx context.Context) ([]sandbox.Sandbox, error) {
 	out, _, code, err := d.run(ctx, nil, "ps", "-a", "--filter", "label=peapod.managed=true", "--format", "{{.Names}}")
 	if err != nil {
@@ -301,17 +408,22 @@ func (d *Driver) List(ctx context.Context) ([]sandbox.Sandbox, error) {
 	if code != 0 {
 		return nil, errors.New("list failed")
 	}
-	var res []sandbox.Sandbox
+	var names []string
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
+		if line = strings.TrimSpace(line); line != "" {
+			names = append(names, line)
+		}
+	}
+	metas, err := d.inspect(ctx, names...)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]sandbox.Sandbox, 0, len(metas))
+	for _, m := range metas {
+		if m.Config.Labels["peapod.id"] == "" {
 			continue
 		}
-		sb, err := d.Resolve(ctx, strings.TrimPrefix(line, "peapod-"))
-		if err != nil {
-			continue
-		}
-		res = append(res, sb)
+		res = append(res, d.fromMeta(m))
 	}
 	return res, nil
 }

@@ -55,6 +55,9 @@ func validate(spec Spec) error {
 	if !spec.Network.Valid() {
 		return fmt.Errorf("invalid network policy %q (use %q or %q)", spec.Network, NetworkNone, NetworkEgress)
 	}
+	if len(spec.Allow) > 0 && len(spec.Ports) > 0 {
+		return fmt.Errorf("--allow puts the sandbox on an internal network, which cannot publish ports; use --allow or --ports, not both")
+	}
 	return nil
 }
 
@@ -180,8 +183,9 @@ func (m *Manager) Fork(ctx context.Context, snapshotRef string, spec Spec) (Sand
 	return m.drv.Fork(ctx, snapshotRef, spec)
 }
 
-// Reap destroys sandboxes whose age exceeds maxAge and returns the ids reaped.
-// Age is measured from creation (Phase 1); true idle tracking comes later.
+// Reap destroys sandboxes idle for longer than maxAge and returns the ids
+// reaped. Idleness is measured from the last exec (the audit trail's mtime),
+// falling back to creation time — so a long-lived but active sandbox is kept.
 func (m *Manager) Reap(ctx context.Context, maxAge time.Duration) ([]string, error) {
 	boxes, err := m.List(ctx)
 	if err != nil {
@@ -190,7 +194,8 @@ func (m *Manager) Reap(ctx context.Context, maxAge time.Duration) ([]string, err
 	cutoff := time.Now().Add(-maxAge)
 	var reaped []string
 	for _, b := range boxes {
-		if b.Created.IsZero() || !b.Created.Before(cutoff) {
+		last := m.lastActivity(b)
+		if last.IsZero() || !last.Before(cutoff) {
 			continue
 		}
 		if err := m.Destroy(ctx, b.ID); err == nil {
@@ -198,6 +203,24 @@ func (m *Manager) Reap(ctx context.Context, maxAge time.Duration) ([]string, err
 		}
 	}
 	return reaped, nil
+}
+
+// SweepOrphans removes leftover backend resources (firewall sidecars/networks)
+// whose sandbox no longer exists. No-op for backends without the capability.
+func (m *Manager) SweepOrphans(ctx context.Context) ([]string, error) {
+	s, ok := m.drv.(Sweeper)
+	if !ok {
+		return nil, nil
+	}
+	boxes, err := m.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(boxes))
+	for _, b := range boxes {
+		ids = append(ids, b.ID)
+	}
+	return s.Sweep(ctx, ids)
 }
 
 // ListSnapshots returns saved snapshots.

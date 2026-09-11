@@ -2,6 +2,8 @@ package sandbox_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +11,46 @@ import (
 	"peapod/internal/driver/mock"
 	"peapod/internal/sandbox"
 )
+
+// TestAllowWithPortsRejected: a firewalled sandbox lives on an internal network,
+// which can't publish ports — asking for both must fail loudly, not silently.
+func TestAllowWithPortsRejected(t *testing.T) {
+	mgr := sandbox.NewManager(mock.New())
+	_, err := mgr.Create(context.Background(), sandbox.Spec{
+		Image: "alpine", Allow: []string{"pypi.org"}, Ports: []sandbox.Port{{Host: 8080, Container: 80}},
+	})
+	if err == nil {
+		t.Fatal("Create with --allow and --ports should fail")
+	}
+}
+
+// TestReapUsesActivityNotCreation: a sandbox whose last exec is old gets reaped
+// even though it was created just now — reap keys on activity, not on birth.
+func TestReapUsesActivityNotCreation(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PEAPOD_HISTORY_DIR", dir)
+	ctx := context.Background()
+	mgr := sandbox.NewManager(mock.New())
+	sb, err := mgr.Create(ctx, sandbox.Spec{Image: "alpine"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := mgr.Exec(ctx, sb.ID, []string{"true"}, sandbox.ExecOpts{}); err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	// Backdate the audit trail: "last activity two hours ago".
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, sb.ID+".jsonl"), old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	reaped, err := mgr.Reap(ctx, time.Hour)
+	if err != nil {
+		t.Fatalf("reap: %v", err)
+	}
+	if len(reaped) != 1 || reaped[0] != sb.ID {
+		t.Errorf("reaped = %v, want [%s] (old activity despite recent creation)", reaped, sb.ID)
+	}
+}
 
 // TestRejectsUnknownNetwork guards the fail-closed rule: an unknown policy must
 // error instead of falling through to the runtime's default (full) network.

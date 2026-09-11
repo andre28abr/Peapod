@@ -23,9 +23,9 @@ func New(mgr *sandbox.Manager) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "peapod_sandbox_create",
-		Description: "Create a fresh, isolated, disposable sandbox (a container) to run untrusted or agent-generated code. Networking is OFF by default. Returns a sandbox id used by the other tools.",
+		Description: "Create a fresh, isolated, disposable sandbox (a container) to run untrusted or agent-generated code. Networking is OFF by default; to reach specific sites pass `allow` (a domain allowlist) and the sandbox gets a bypass-proof egress firewall that permits only those domains. Returns a sandbox id used by the other tools.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createIn) (*mcp.CallToolResult, createOut, error) {
-		sb, err := mgr.Create(ctx, sandbox.Spec{Image: in.Image, Name: in.Name, Network: sandbox.NetworkPolicy(in.Network)})
+		sb, err := mgr.Create(ctx, sandbox.Spec{Image: in.Image, Name: in.Name, Network: sandbox.NetworkPolicy(in.Network), Allow: in.Allow})
 		if err != nil {
 			return nil, createOut{}, err
 		}
@@ -113,7 +113,7 @@ func New(mgr *sandbox.Manager) *mcp.Server {
 		Name:        "peapod_fork",
 		Description: "Create a new sandbox from a snapshot. (Phase 2 preview.)",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in forkIn) (*mcp.CallToolResult, createOut, error) {
-		sb, err := mgr.Fork(ctx, in.Snapshot, sandbox.Spec{Name: in.Name, Network: sandbox.NetworkPolicy(in.Network)})
+		sb, err := mgr.Fork(ctx, in.Snapshot, sandbox.Spec{Name: in.Name, Network: sandbox.NetworkPolicy(in.Network), Allow: in.Allow})
 		if err != nil {
 			return nil, createOut{}, err
 		}
@@ -215,6 +215,9 @@ func reapLoop(ctx context.Context, mgr *sandbox.Manager, ttl time.Duration) {
 			if ids, err := mgr.Reap(ctx, ttl); err == nil && len(ids) > 0 {
 				fmt.Fprintf(os.Stderr, "peapod: reaped %d idle sandbox(es): %v\n", len(ids), ids)
 			}
+			if swept, err := mgr.SweepOrphans(ctx); err == nil && len(swept) > 0 {
+				fmt.Fprintf(os.Stderr, "peapod: swept %d orphaned firewall resource(s): %v\n", len(swept), swept)
+			}
 		}
 	}
 }
@@ -226,9 +229,10 @@ func asCreateOut(sb sandbox.Sandbox) createOut {
 // --- tool input/output types (schemas are derived from these) ---
 
 type createIn struct {
-	Image   string `json:"image" jsonschema:"OCI image for the sandbox, e.g. 'python:3.12-slim' or 'alpine'"`
-	Name    string `json:"name,omitempty" jsonschema:"optional human-friendly label"`
-	Network string `json:"network,omitempty" jsonschema:"network policy: 'none' (default, no network) or 'egress' (outbound allowed)"`
+	Image   string   `json:"image" jsonschema:"OCI image for the sandbox, e.g. 'python:3.12-slim' or 'alpine'"`
+	Name    string   `json:"name,omitempty" jsonschema:"optional human-friendly label"`
+	Network string   `json:"network,omitempty" jsonschema:"network policy: 'none' (default, no network) or 'egress' (all outbound allowed); ignored when allow is set"`
+	Allow   []string `json:"allow,omitempty" jsonschema:"egress domain allowlist, e.g. ['pypi.org','files.pythonhosted.org'] (subdomains included). Builds a bypass-proof firewall: the sandbox's only network is internal and its only exit is a proxy permitting just these domains, so even a process that ignores HTTP(S)_PROXY has no route out. Tools must honour HTTP(S)_PROXY (curl, pip, npm, apt and git-over-https do). Private/loopback destinations are always refused"`
 }
 
 type createOut struct {
@@ -308,7 +312,8 @@ type snapDiffIn struct {
 }
 
 type forkIn struct {
-	Snapshot string `json:"snapshot" jsonschema:"snapshot ref from peapod_snapshot"`
-	Name     string `json:"name,omitempty" jsonschema:"optional label for the new sandbox"`
-	Network  string `json:"network,omitempty" jsonschema:"network policy: 'none' or 'egress'"`
+	Snapshot string   `json:"snapshot" jsonschema:"snapshot ref from peapod_snapshot"`
+	Name     string   `json:"name,omitempty" jsonschema:"optional label for the new sandbox"`
+	Network  string   `json:"network,omitempty" jsonschema:"network policy: 'none' or 'egress'; ignored when allow is set"`
+	Allow    []string `json:"allow,omitempty" jsonschema:"egress domain allowlist (see peapod_sandbox_create)"`
 }

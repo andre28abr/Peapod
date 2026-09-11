@@ -100,6 +100,25 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("exec stdout = %q, want it to contain 'hi'", res.Stdout)
 	}
 
+	// List goes through the single-inspect path; the new sandbox must be there
+	// with its labels rebuilt correctly.
+	boxes, err := mgr.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	found := false
+	for _, b := range boxes {
+		if b.ID == sb.ID {
+			found = true
+			if b.Image != "alpine" || b.Network != sandbox.NetworkNone || b.Paused {
+				t.Errorf("list entry = %+v", b)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("created sandbox %s missing from List", sb.ID)
+	}
+
 	// The exec timeout must be enforced *inside* the sandbox: a long sleep gets
 	// killed by the watchdog (non-zero exit) instead of outliving the client.
 	start := time.Now()
