@@ -401,12 +401,14 @@ func (d *Driver) Resolve(ctx context.Context, id string) (sandbox.Sandbox, error
 // List finds every peapod-managed container in two runtime calls (ps, then one
 // inspect for all the names) instead of one inspect per sandbox.
 func (d *Driver) List(ctx context.Context) ([]sandbox.Sandbox, error) {
-	out, _, code, err := d.run(ctx, nil, "ps", "-a", "--filter", "label=peapod.managed=true", "--format", "{{.Names}}")
+	out, errOut, code, err := d.run(ctx, nil, "ps", "-a", "--filter", "label=peapod.managed=true", "--format", "{{.Names}}")
 	if err != nil {
 		return nil, err
 	}
 	if code != 0 {
-		return nil, errors.New("list failed")
+		// Keep the runtime's message: callers (the app) tell "daemon down" from
+		// other failures by it.
+		return nil, fmt.Errorf("list failed: %s", strings.TrimSpace(errOut))
 	}
 	var names []string
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
@@ -519,14 +521,14 @@ func (d *Driver) Fork(ctx context.Context, snapshotRef string, spec sandbox.Spec
 
 // ListSnapshots lists the peapod-snapshot images.
 func (d *Driver) ListSnapshots(ctx context.Context) ([]sandbox.Snapshot, error) {
-	out, _, code, err := d.run(ctx, nil, "images",
+	out, errOut, code, err := d.run(ctx, nil, "images",
 		"--filter", "reference=peapod-snapshot",
 		"--format", "{{.Repository}}:{{.Tag}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}")
 	if err != nil {
 		return nil, err
 	}
 	if code != 0 {
-		return nil, errors.New("list snapshots failed")
+		return nil, fmt.Errorf("list snapshots failed: %s", strings.TrimSpace(errOut))
 	}
 	var res []sandbox.Snapshot
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {

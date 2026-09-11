@@ -69,17 +69,65 @@ func runPeapod(_ args: [String]) -> (out: String, err: String, ok: Bool) {
             p.terminationStatus == 0)
 }
 
-// fetchStats is a free (non-actor) function so it can run off the main thread.
+// The helpers below are free (non-actor) functions so they can run off the main
+// thread; the Model dispatches them and publishes results back on the main actor.
 func fetchStats(_ id: String) -> Stat? {
     let r = runPeapod(["sandbox", "stats", id, "--json"])
     guard r.ok, let d = r.out.data(using: .utf8) else { return nil }
     return try? JSONDecoder().decode(Stat.self, from: d)
 }
 
-// execCmd runs a shell command in the sandbox (off the main thread).
 func execCmd(_ id: String, _ command: String) -> String {
     let r = runPeapod(["sandbox", "exec", id, "sh", "-lc", command])
     return r.out + r.err
+}
+
+func fetchLogs(_ id: String) -> String {
+    let r = runPeapod(["sandbox", "logs", id, "--tail", "200"])
+    let t = (r.out + r.err).trimmingCharacters(in: .whitespacesAndNewlines)
+    return t.isEmpty ? "(sem saída ainda)" : t
+}
+
+func fetchHistory(_ id: String) -> [HistoryEntry] {
+    let r = runPeapod(["sandbox", "history", id, "--json"])
+    guard r.ok, let d = r.out.data(using: .utf8) else { return [] }
+    return (try? JSONDecoder().decode([HistoryEntry].self, from: d)) ?? []
+}
+
+func fetchTemplates() -> [Template] {
+    let r = runPeapod(["templates", "--json"])
+    guard r.ok, let d = r.out.data(using: .utf8) else { return [] }
+    return (try? JSONDecoder().decode([Template].self, from: d)) ?? []
+}
+
+/// Last meaningful line of peapod's stderr, without the "peapod: " prefix.
+func shortError(_ err: String) -> String {
+    let lines = err.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    var msg = lines.last ?? ""
+    if msg.hasPrefix("peapod: ") { msg = String(msg.dropFirst(8)) }
+    if msg.isEmpty { msg = "erro desconhecido" }
+    return msg.count > 160 ? String(msg.prefix(160)) + "…" : msg
+}
+
+/// True when the failure is the container engine being unreachable (as opposed
+/// to, say, a typo in an image name) — the only case that deserves the
+/// "OrbStack não está rodando" screen.
+func looksLikeEngineDown(_ err: String) -> Bool {
+    let e = err.lowercased()
+    // Covers the older "Cannot connect to the Docker daemon…" wording, the newer
+    // "failed to connect to the docker API… check if the daemon is running", a
+    // missing/refused socket, and a runtime that isn't installed at all.
+    return ["cannot connect to the docker daemon", "failed to connect to the docker api",
+            "daemon is running", "docker.sock", "connection refused", "no such file or directory",
+            "no container runtime", "executable file not found", "command not found",
+            "cannot launch peapod"].contains { e.contains($0) }
+}
+
+/// A sticky, dismissible message (an error or a success note). Unlike `status`,
+/// the periodic refresh never overwrites it.
+struct Flash {
+    let text: String
+    let isError: Bool
 }
 
 @MainActor
@@ -88,19 +136,42 @@ final class Model: ObservableObject {
     @Published var status: String = "carregando…"
     @Published var engineDown = false
     @Published var busy = false
+    @Published var flash: Flash?
+    private var refreshing = false
+    private var refreshQueued = false
+
+    /// Runs `peapod` off the main thread and delivers the result on the main actor.
+    private func run(_ args: [String], _ done: @escaping (String, String, Bool) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let r = runPeapod(args)
+            DispatchQueue.main.async { done(r.out, r.err, r.ok) }
+        }
+    }
 
     func refresh() {
-        let r = runPeapod(["sandbox", "ls", "--json"])
-        guard r.ok, let data = r.out.data(using: .utf8),
-              let list = try? JSONDecoder().decode([Sandbox].self, from: data) else {
-            boxes = []
-            engineDown = true
-            status = "o OrbStack não está rodando"
-            return
+        if refreshing { refreshQueued = true; return }
+        refreshing = true
+        run(["sandbox", "ls", "--json"]) { out, err, ok in
+            self.refreshing = false
+            defer {
+                if self.refreshQueued { self.refreshQueued = false; self.refresh() }
+            }
+            guard ok, let data = out.data(using: .utf8),
+                  let list = try? JSONDecoder().decode([Sandbox].self, from: data) else {
+                if looksLikeEngineDown(err) {
+                    self.boxes = []
+                    self.engineDown = true
+                    self.status = "o OrbStack não está rodando"
+                } else {
+                    self.engineDown = false
+                    self.flash = Flash(text: "Falha ao listar sandboxes: " + shortError(err), isError: true)
+                }
+                return
+            }
+            self.engineDown = false
+            self.boxes = list
+            self.status = list.isEmpty ? "nenhum sandbox ainda" : "\(list.count) sandbox(es)"
         }
-        engineDown = false
-        boxes = list
-        status = list.isEmpty ? "nenhum sandbox ainda" : "\(list.count) sandbox(es)"
     }
 
     func openEngine() {
@@ -111,53 +182,39 @@ final class Model: ObservableObject {
         status = "iniciando o OrbStack…"
     }
 
+    /// Runs a mutating command off the main thread with the busy indicator on,
+    /// surfaces a failure as a Flash, and refreshes the list afterwards.
+    private func act(_ label: String, _ args: [String], onSuccess: ((String) -> Void)? = nil) {
+        if busy { return }
+        busy = true
+        flash = nil
+        run(args) { out, err, ok in
+            self.busy = false
+            if ok {
+                onSuccess?(out)
+            } else {
+                self.flash = Flash(text: "Falha ao \(label): " + shortError(err), isError: true)
+            }
+            self.refresh()
+        }
+    }
+
     func create(_ image: String) {
         if busy { return }
         let img = image.trimmingCharacters(in: .whitespaces)
         let target = img.isEmpty ? "alpine" : img
-        busy = true
         status = "criando sandbox (\(target))… baixando a imagem na primeira vez"
-        DispatchQueue.global(qos: .userInitiated).async {
-            _ = runPeapod(["sandbox", "create", target])
-            DispatchQueue.main.async {
-                self.busy = false
-                self.refresh()
-            }
-        }
+        act("criar o sandbox (\(target))", ["sandbox", "create", target])
     }
-    func destroy(_ id: String) { _ = runPeapod(["sandbox", "rm", id]); refresh() }
-    func pause(_ id: String) { _ = runPeapod(["sandbox", "pause", id]); refresh() }
-    func resume(_ id: String) { _ = runPeapod(["sandbox", "resume", id]); refresh() }
+    func destroy(_ id: String) { act("apagar \(id)", ["sandbox", "rm", id]) }
+    func pause(_ id: String) { act("pausar \(id)", ["sandbox", "pause", id]) }
+    func resume(_ id: String) { act("retomar \(id)", ["sandbox", "resume", id]) }
 
     func snapshot(_ id: String) {
         let name = "\(id)-\(Int(Date().timeIntervalSince1970))"
-        let r = runPeapod(["sandbox", "snapshot", id, name])
-        status = r.ok ? "snapshot: " + r.out.trimmingCharacters(in: .whitespacesAndNewlines)
-                      : "falha no snapshot"
-    }
-
-    func logs(_ id: String) -> String {
-        let r = runPeapod(["sandbox", "logs", id, "--tail", "200"])
-        let t = (r.out + r.err).trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? "(sem saída ainda)" : t
-    }
-
-    func stats(_ id: String) -> Stat? {
-        let r = runPeapod(["sandbox", "stats", id, "--json"])
-        guard r.ok, let d = r.out.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(Stat.self, from: d)
-    }
-
-    func history(_ id: String) -> [HistoryEntry] {
-        let r = runPeapod(["sandbox", "history", id, "--json"])
-        guard r.ok, let d = r.out.data(using: .utf8) else { return [] }
-        return (try? JSONDecoder().decode([HistoryEntry].self, from: d)) ?? []
-    }
-
-    func templates() -> [Template] {
-        let r = runPeapod(["templates", "--json"])
-        guard r.ok, let d = r.out.data(using: .utf8) else { return [] }
-        return (try? JSONDecoder().decode([Template].self, from: d)) ?? []
+        act("criar o snapshot de \(id)", ["sandbox", "snapshot", id, name]) { out in
+            self.flash = Flash(text: "Snapshot criado: " + out.trimmingCharacters(in: .whitespacesAndNewlines), isError: false)
+        }
     }
 }
 
@@ -182,7 +239,6 @@ struct Sparkline: View {
 }
 
 struct DetailView: View {
-    let model: Model
     let box: Sandbox
     @Environment(\.dismiss) private var dismiss
     @State private var logs = "carregando…"
@@ -287,8 +343,15 @@ struct DetailView: View {
     }
 
     private func load() {
-        logs = model.logs(box.id)
-        history = model.history(box.id)
+        let id = box.id
+        DispatchQueue.global(qos: .userInitiated).async {
+            let l = fetchLogs(id)
+            let h = fetchHistory(id)
+            DispatchQueue.main.async {
+                logs = l
+                history = h
+            }
+        }
         sample()
     }
 
@@ -316,11 +379,12 @@ struct DetailView: View {
         running = true
         DispatchQueue.global(qos: .userInitiated).async {
             let out = execCmd(id, c)
+            let h = fetchHistory(id)
             DispatchQueue.main.async {
                 cmdOut = out.trimmingCharacters(in: .whitespacesAndNewlines)
                 if cmdOut.isEmpty { cmdOut = "(sem saída)" }
                 running = false
-                history = model.history(id)
+                history = h
             }
         }
     }
@@ -402,6 +466,21 @@ struct ContentView: View {
                     .disabled(model.busy)
             }
 
+            if let f = model.flash {
+                HStack(spacing: 6) {
+                    Image(systemName: f.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .foregroundColor(f.isError ? .orange : .green)
+                    Text(f.text).font(.caption).foregroundColor(f.isError ? .orange : .secondary)
+                        .lineLimit(2).textSelection(.enabled)
+                    Spacer()
+                    Button(action: { model.flash = nil }) { Image(systemName: "xmark") }
+                        .buttonStyle(.borderless)
+                }
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(6)
+            }
+
             if model.engineDown {
                 Spacer()
                 VStack(spacing: 12) {
@@ -444,14 +523,21 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderless)
                     .padding(.vertical, 2)
+                    .disabled(model.busy)
                 }
             }
         }
         .padding(16)
         .frame(minWidth: 620, minHeight: 440)
-        .onAppear { model.refresh(); templates = model.templates() }
+        .onAppear {
+            model.refresh()
+            DispatchQueue.global(qos: .utility).async {
+                let t = fetchTemplates()
+                DispatchQueue.main.async { templates = t }
+            }
+        }
         .onReceive(timer) { _ in if !model.busy { model.refresh() } }
-        .sheet(item: $selected) { b in DetailView(model: model, box: b) }
+        .sheet(item: $selected) { b in DetailView(box: b) }
         .sheet(isPresented: $showCreate) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
