@@ -70,6 +70,10 @@ O **Peapod** nasceu como exercício pessoal de portfólio com três objetivos:
 
 **SC Platform** *(privado, disponível para apresentação mediante solicitação)*: SaaS multi-tenant para gestão de licitações públicas, com PNCP em tempo real, simulador da Lei 14.133/2021, robô de lances em três modos, extração de PDF com IA local, CRM e Telegram. Cerca de 75 mil linhas e 547 testes.
 
+**AUGRAZ** *(privado, produto da empresa do autor)*: plataforma de compliance **LGPD + ISO 27001** para assessoria de proteção de dados: 11 módulos por empresa-cliente (ROPA, canal do titular, incidentes, comunicações com a ANPD, fornecedores, treinamentos), biblioteca dos 93 controles do Anexo A da ISO/IEC 27001:2022 com Gap Analysis, relatórios imprimíveis e geradores de política de privacidade, aviso de cookies e termos de uso. Flask, testes em SQLite e PostgreSQL, CI com lint e auditoria de dependências.
+
+**Site AUGRAZ** *(privado, protótipo ainda não publicado)*: site institucional em HTML e PHP com formulário de contato em PDO e prepared statements, credenciais fora do repositório e `.htaccess` com HTTPS forçado, bloqueio de arquivos sensíveis e cabeçalhos de segurança (HSTS, nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy).
+
 ---
 
 → **[LinkedIn](https://linkedin.com/in/andreaugusto-azariasdesouza)** · [GitHub](https://github.com/andre28abr)
