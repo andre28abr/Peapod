@@ -38,7 +38,7 @@ Atualmente em **transição de carreira, com disponibilidade imediata**, este pr
 
 **[Plataforma LGPD](https://github.com/andre28abr/lgpd-platform)** — Plataforma web multi-tenant que **treina, avalia e opera** a conformidade com a LGPD (ROPA, RIPD, direitos do titular, resposta a incidentes).
 
-**SC Platform** *(privado, sob NDA — disponível para apresentação em entrevistas mediante solicitação)* — SaaS multi-tenant para gestão de licitações públicas (PNCP, simulador da Lei 14.133, robô de lances, extração de PDF com IA local, CRM). 75k+ linhas, 420 testes.
+**SC Platform** *(privado, sob NDA — disponível para apresentação em entrevistas mediante solicitação)* — SaaS multi-tenant para gestão de licitações públicas (PNCP, simulador da Lei 14.133, robô de lances, extração de PDF com IA local, CRM). 75k+ linhas, 547 testes.
 
 Onde o SentinelBR cuida do *servidor* e o VigiaOS da *estação de trabalho*, o **Peapod** cuida de um terceiro lugar onde dados sensíveis vão passar cada vez mais: a **execução de código por agentes de IA**.
 
@@ -171,14 +171,27 @@ peapod templates | ui | mcp | version
 peapod --backend oci|apple|mock <command>
 ```
 
+## 📚 Documentação
+
+- **[Guia para todos](docs/GUIA.md)** — o Peapod sem jargão: o que é, por que importa, primeiros passos, receitas e FAQ.
+- **[Manual técnico](docs/MANUAL.md)** — arquitetura, backends, modelo de segurança, referência da CLI, as 12 ferramentas MCP, snapshots, preview envs, multi-serviço, variáveis de ambiente.
+- **[Site](https://andre28abr.github.io/Peapod/)** — página de apresentação (gerada de `docs/`).
+- **[App nativo](ui-native/README.md)** — como compilar `Peapod.app` e `Peapod.dmg`.
+- **[AUTHOR.md](AUTHOR.md)** — sobre o autor.
+
+Os dois guias também abrem dentro do app (abas *Para todos* e *Técnico*).
+
 ## 🔬 Desenvolvimento
 
 ```sh
-go test ./...     # usa o driver mock em memória — não precisa de daemon
-go vet ./...
+go test -race ./...                                       # 27 testes; driver mock em memória — não precisa de daemon
+go vet ./... && go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+cd ui-native && ./build.sh                                # Peapod.app + Peapod.dmg (macOS)
 ```
 
-CI (GitHub Actions) roda vet/test/build a cada push. Tap Homebrew: [andre28abr/homebrew-peapod](https://github.com/andre28abr/homebrew-peapod) (fórmula também versionada em `Formula/peapod.rb`).
+O servidor MCP é testado de ponta a ponta pelo protocolo (cliente em memória do SDK oficial): as 12 ferramentas registradas, o ciclo criar → escrever → executar → histórico → destruir, snapshot/fork e erros que chegam ao agente como *tool errors*, nunca como queda de sessão.
+
+CI (GitHub Actions) roda vet, staticcheck, testes com *race detector* e build no Linux, e compila o app SwiftUI no macOS conferindo o alvo mínimo (13.0) a cada push. Tap Homebrew: [andre28abr/homebrew-peapod](https://github.com/andre28abr/homebrew-peapod) (fórmula também versionada em `Formula/peapod.rb`).
 
 ## 📄 Licença
 
