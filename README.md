@@ -17,7 +17,6 @@
 ![Tests](https://img.shields.io/badge/tests-27%20passando%20%C2%B7%20go%20test%20--race-success)
 ![Homebrew](https://img.shields.io/badge/Homebrew-brew%20install%20peapod-FBB040?logo=homebrew&logoColor=black)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-orange)
-[![Baixar](https://img.shields.io/badge/baixar-Peapod.dmg-1D9E75?logo=apple&logoColor=white)](https://github.com/andre28abr/Peapod/releases/latest)
 
 ![Demo do Peapod](docs/demo.gif)
 
@@ -118,19 +117,16 @@ Não é para rodar serviços de produção nem substituir o Docker Desktop em ap
 
 ## ⬇️ Instalar (macOS)
 
-**[⬇️ Baixar a última versão — Peapod.dmg](https://github.com/andre28abr/Peapod/releases/latest)** · abra o `.dmg` e arraste o **Peapod** para *Aplicativos*. (macOS 13+, **Apple Silicon**; em Intel, compile a partir do código.)
-
-> Na primeira vez, como o app é assinado *ad-hoc* (não notarizado pela Apple), o macOS exibe um aviso de segurança. Clique com o **botão direito em Peapod → Abrir → Abrir** — depois disso, abre com duplo-clique normalmente.
->
-> Requer **OrbStack** (ou Docker) rodando.
-
-**CLI + servidor MCP via Homebrew:**
+**Pelo Homebrew** (macOS 13+, Apple Silicon):
 
 ```sh
 brew tap andre28abr/peapod
 brew trust andre28abr/peapod   # Homebrew 6+: confiar no tap (uma vez)
-brew install peapod
+brew install --cask peapod     # app de macOS
+brew install peapod            # CLI + servidor MCP
 ```
+
+Sem Homebrew, baixe o [Peapod.dmg](https://github.com/andre28abr/Peapod/releases/latest) e arraste o app para *Aplicativos*. O app é assinado ad-hoc (não notarizado pela Apple): na primeira abertura, clique com o botão direito e escolha **Abrir**. Em Intel, compile a partir do código. Requer **OrbStack** (ou Docker) rodando.
 
 ## 🚀 Começando (a partir do código)
 
