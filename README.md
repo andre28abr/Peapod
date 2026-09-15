@@ -32,15 +32,13 @@ Desde 2025 conduz, como **product owner técnico**, projetos open-source de segu
 
 ### 📂 Outros projetos do autor
 
-**[SentinelBR](https://github.com/andre28abr/SentinelBR-platform)** — Plataforma open-source de **SIEM + LGPD** para PMEs brasileiras: agente Go (gRPC mTLS), detecção em tempo real, resposta automatizada e compliance LGPD nativa, multi-tenant.
+- **[SentinelBR](https://github.com/andre28abr/SentinelBR-platform)**: plataforma open-source de SIEM + LGPD para PMEs brasileiras: agente Go com gRPC e mTLS, detecção em tempo real, resposta automatizada e compliance LGPD nativa, multi-tenant.
+- **[VigiaOS](https://github.com/andre28abr/VigiaOS)**: suíte de segurança, privacidade e LGPD para a estação de trabalho (Fedora Workstation, GTK4 + libadwaita), com 13 ferramentas defensivas, módulos de detecção e resposta e laboratório educacional.
+- **[Plataforma LGPD](https://github.com/andre28abr/lgpd-platform)**: plataforma web multi-tenant que treina, avalia e certifica os setores de uma empresa em LGPD e dá ao DPO as ferramentas de operação (ROPA, RIPD, direitos do titular, incidentes).
+- **[Uptend](https://github.com/andre28abr/Uptend)**: app nativo de macOS para configurar e manter o Mac e auditar servidores Linux: coletor portátil, relatórios, correlação com CVEs, MITRE ATT&CK, lente LGPD e playbook de hardening com rollback. Swift 6.
+- **[banana](https://github.com/andre28abr/banana)**: editor local-first de notas Markdown, código e PDF, com vault cifrado (Argon2id + AES-256-GCM). Tauri 2, Rust e Svelte 5.
 
-**[VigiaOS](https://github.com/andre28abr/VigiaOS)** — Suíte de **segurança, privacidade e LGPD** para a *estação de trabalho* (Fedora Workstation, GTK4 + libadwaita): hardening, antivírus, integridade de arquivos e relatórios de conformidade.
-
-**[Plataforma LGPD](https://github.com/andre28abr/lgpd-platform)** — Plataforma web multi-tenant que **treina, avalia e opera** a conformidade com a LGPD (ROPA, RIPD, direitos do titular, resposta a incidentes).
-
-**SC Platform** *(privado, disponível para apresentação mediante solicitação)* — SaaS multi-tenant para gestão de licitações públicas (PNCP, simulador da Lei 14.133, robô de lances, extração de PDF com IA local, CRM). 75k+ linhas, 547 testes.
-
-Onde o SentinelBR cuida do *servidor* e o VigiaOS da *estação de trabalho*, o **Peapod** cuida de um terceiro lugar onde dados sensíveis vão passar cada vez mais: a **execução de código por agentes de IA**.
+Todos os projetos, com o porquê de cada um, no perfil [github.com/andre28abr](https://github.com/andre28abr).
 
 ---
 
